@@ -1,4 +1,4 @@
-import { PlayerProgress, UpgradeId } from '../types';
+import { OrientationMode, PlayerProgress, UpgradeId } from '../types';
 
 const STORAGE_KEY = 'neon_runner_progress_v2';
 const LEGACY_HIGHSCORE_KEY = 'neon_runner_highscore';
@@ -7,6 +7,7 @@ const DEFAULT_PROGRESS: PlayerProgress = {
   highScore: 0,
   totalCredits: 0,
   muted: false,
+  orientationMode: 'auto',
   upgrades: {
     shieldDuration: 0,
     magnetDuration: 0,
@@ -14,6 +15,10 @@ const DEFAULT_PROGRESS: PlayerProgress = {
     creditMultiplier: 0,
   },
 };
+
+function sanitizeOrientation(val: unknown): OrientationMode {
+  return val === 'landscape' ? 'landscape' : 'auto';
+}
 
 export function loadProgress(): PlayerProgress {
   try {
@@ -24,6 +29,7 @@ export function loadProgress(): PlayerProgress {
         highScore: typeof parsed.highScore === 'number' ? parsed.highScore : 0,
         totalCredits: typeof parsed.totalCredits === 'number' ? parsed.totalCredits : 0,
         muted: Boolean(parsed.muted),
+        orientationMode: sanitizeOrientation(parsed.orientationMode),
         upgrades: {
           shieldDuration: sanitizeLevel(parsed.upgrades?.shieldDuration),
           magnetDuration: sanitizeLevel(parsed.upgrades?.magnetDuration),

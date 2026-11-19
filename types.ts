@@ -5,6 +5,8 @@ export enum GameState {
   GAME_OVER = 'GAME_OVER',
 }
 
+export type OrientationMode = 'auto' | 'landscape';
+
 export type UpgradeId =
   | 'shieldDuration'
   | 'magnetDuration'
@@ -15,6 +17,7 @@ export interface PlayerProgress {
   highScore: number;
   totalCredits: number;
   muted: boolean;
+  orientationMode: OrientationMode;
   upgrades: Record<UpgradeId, number>;
 }
 

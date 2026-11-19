@@ -14,9 +14,14 @@ export const GAME_CONFIG = {
   SPEED_INCREMENT: 24,
   DIFFICULTY_INTERVAL_METERS: 120,
   GROUND_HEIGHT: 96,
+  GROUND_HEIGHT_COMPACT: 72,
   POOL_SIZE: 16,
   POWERUP_INTERVAL_METERS: 180,
 };
+
+export function getGroundHeight(viewportHeight: number): number {
+  return viewportHeight < 480 ? GAME_CONFIG.GROUND_HEIGHT_COMPACT : GAME_CONFIG.GROUND_HEIGHT;
+}
 
 export interface UpgradeConfig {
   id: UpgradeId;

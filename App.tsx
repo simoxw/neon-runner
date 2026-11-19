@@ -6,7 +6,8 @@ import PauseModal from './components/PauseModal.tsx';
 import UpgradesModal from './components/UpgradesModal.tsx';
 import { getUpgradeCost, UPGRADES_CATALOG } from './constants.ts';
 import PhaserGame from './game/PhaserGame.tsx';
-import { ActiveBuffs, GameState, PlayerProgress, UpgradeId } from './types.ts';
+import { useOrientation } from './hooks/useOrientation.ts';
+import { ActiveBuffs, GameState, OrientationMode, PlayerProgress, UpgradeId } from './types.ts';
 import { soundEngine } from './utils/sound.ts';
 import { loadProgress, saveProgress, updateUpgradeLevel } from './utils/storage.ts';
 
@@ -33,6 +34,8 @@ const App: React.FC = () => {
   const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
   const [buffs, setBuffs] = useState<ActiveBuffs>(EMPTY_BUFFS);
   const [isNewRecord, setIsNewRecord] = useState(false);
+
+  const { showRotateHint, applyOrientation, dismissRotateHint } = useOrientation();
 
   const progressRef = useRef(progress);
   progressRef.current = progress;
@@ -121,9 +124,23 @@ const App: React.FC = () => {
     setProgress(updated);
   };
 
+  const toggleOrientationMode = () => {
+    const nextMode: OrientationMode = progress.orientationMode === 'auto' ? 'landscape' : 'auto';
+    const updated: PlayerProgress = {
+      ...progress,
+      orientationMode: nextMode,
+    };
+    saveProgress(updated);
+    setProgress(updated);
+    void applyOrientation(nextMode, true);
+  };
+
   const startGame = () => {
     soundEngine.unlock();
     setShowUpgrades(false);
+    if (progress.orientationMode === 'landscape') {
+      void applyOrientation('landscape', false);
+    }
     window.dispatchEvent(new CustomEvent('PHASER_START'));
   };
 
@@ -158,7 +175,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#06070d]">
+    <div className="relative h-dvh w-full overflow-hidden bg-[#06070d]">
       <PhaserGame onEvent={handleGameEvent} />
 
       {gameState === GameState.MENU && (
@@ -166,10 +183,14 @@ const App: React.FC = () => {
           highScore={progress.highScore}
           totalCredits={progress.totalCredits}
           muted={progress.muted}
+          orientationMode={progress.orientationMode}
+          showRotateHint={showRotateHint}
           canAffordUpgrade={canAffordUpgrade}
           onStart={startGame}
           onOpenUpgrades={() => setShowUpgrades(true)}
           onToggleMute={toggleMute}
+          onToggleOrientation={toggleOrientationMode}
+          onDismissRotateHint={dismissRotateHint}
         />
       )}
 

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   GAME_CONFIG,
   getCreditMultiplier,
+  getGroundHeight,
   getMagnetDurationMs,
   getShieldDurationMs,
 } from '../../constants';
@@ -47,11 +48,11 @@ export class MainGame extends Phaser.Scene {
     soundEngine.setMuted(this.progress.muted);
 
     const { width, height } = this.scale;
-    const gh = GAME_CONFIG.GROUND_HEIGHT;
+    const gh = getGroundHeight(height);
 
     this.sky = this.add.tileSprite(0, 0, width, height, 'sky').setOrigin(0, 0).setScrollFactor(0);
-    this.cityFar = this.add.tileSprite(0, Math.max(0, height - gh - 340), width, 420, 'city_far').setOrigin(0, 0).setScrollFactor(0);
-    this.cityNear = this.add.tileSprite(0, Math.max(0, height - gh - 260), width, 340, 'city_near').setOrigin(0, 0).setScrollFactor(0);
+    this.cityFar = this.add.tileSprite(0, height - gh - 340, width, 420, 'city_far').setOrigin(0, 0).setScrollFactor(0);
+    this.cityNear = this.add.tileSprite(0, height - gh - 260, width, 340, 'city_near').setOrigin(0, 0).setScrollFactor(0);
     this.ground = this.add.tileSprite(0, height - gh, width, gh, 'ground').setOrigin(0, 0).setScrollFactor(0);
 
     this.groundBody = this.add.rectangle(width / 2, height - gh / 2, width, gh, 0x000000, 0);
@@ -233,17 +234,17 @@ export class MainGame extends Phaser.Scene {
   private handleResize(gameSize: Phaser.Structs.Size) {
     const width = gameSize.width;
     const height = gameSize.height;
-    const gh = GAME_CONFIG.GROUND_HEIGHT;
+    const gh = getGroundHeight(height);
 
     if (this.sky) {
       this.sky.setSize(width, height);
     }
     if (this.cityFar) {
-      this.cityFar.setPosition(0, Math.max(0, height - gh - 340));
+      this.cityFar.setPosition(0, height - gh - 340);
       this.cityFar.setSize(width, 420);
     }
     if (this.cityNear) {
-      this.cityNear.setPosition(0, Math.max(0, height - gh - 260));
+      this.cityNear.setPosition(0, height - gh - 260);
       this.cityNear.setSize(width, 340);
     }
     if (this.ground) {
@@ -367,8 +368,9 @@ export class MainGame extends Phaser.Scene {
     this.resetGame();
     this.obstacleManager?.reset();
     const { width, height } = this.scale;
+    const gh = getGroundHeight(height);
     const playerStartX = Math.min(130, Math.max(76, width * 0.16));
-    this.player?.reset(playerStartX, height - GAME_CONFIG.GROUND_HEIGHT - 36);
+    this.player?.reset(playerStartX, height - gh - 36);
     this.emitBuffUpdate();
   }
 
@@ -532,8 +534,9 @@ export class MainGame extends Phaser.Scene {
     this.resetGame();
     this.obstacleManager?.reset();
     const { width, height } = this.scale;
+    const gh = getGroundHeight(height);
     const playerStartX = Math.min(130, Math.max(76, width * 0.16));
-    this.player?.reset(playerStartX, height - GAME_CONFIG.GROUND_HEIGHT - 36);
+    this.player?.reset(playerStartX, height - gh - 36);
     this.startRunning();
   }
 

@@ -27,6 +27,7 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 │   │   └── Preloader.ts            # Generatore procedurale di texture e animazioni su canvas
 │   └── PhaserGame.tsx              # Wrapper React che monta e distrugge il canvas Phaser 3
 ├── hooks/
+│   ├── useOrientation.ts           # Hook per toggle orientamento Auto/Landscape, Fullscreen e avviso iOS
 │   └── usePWAInstall.ts            # Hook React per intercettare beforeinstallprompt e iOS Safari
 ├── public/
 │   ├── .nojekyll                   # Disattiva Jekyll su GitHub Pages per servire tutti gli asset
@@ -92,9 +93,9 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 
 | File | Cosa fa |
 | :--- | :--- |
-| `components/Menu.tsx` | Schermata iniziale sopra il fondale animato in parallasse: mostra titolo, miglior distanza, crediti totali, pulsanti **Start Run**, **Upgrades** (con indicatore `Ready` se un upgrade è acquistabile), toggle audio e **Install App**. |
+| `components/Menu.tsx` | Schermata iniziale sopra il fondale animato in parallasse: mostra titolo, miglior distanza, crediti totali, pulsanti **Start Run**, **Upgrades**, toggle orientamento (**Auto** / **Landscape** con avviso iOS), toggle audio e **Install App**. |
 | `components/HUD.tsx` | Barra superiore leggera e non invasiva durante la corsa: mostra distanza in metri, moltiplicatore velocità, crediti della corsa, barre countdown dinamiche per **Shield** e **Magnet**, toggle **Mute** e pulsante **Pause** ($\ge 44\times44\text{px}$). |
-| `components/PauseModal.tsx` | Finestra modale mostrata in pausa con riepilogo corsa e azioni **Resume**, **Sound: On/Off**, **Restart** e **Main Menu**. |
+| `components/PauseModal.tsx` | Finestra modale mostrata in pausa con riepilogo corsa e azioni **Resume**, **Sound: On/Off**, **Restart** e **Main Menu** (compatta anche in landscape). |
 | `components/GameOver.tsx` | Schermata di fine corsa con distanza raggiunta, crediti guadagnati, droni distrutti, indicatore **New Personal Best**, accesso diretto a **Upgrades**, **Main Menu** e **Play Again**. |
 | `components/UpgradesModal.tsx` | Negozio potenziamenti con 4 schede (**Energy Shield**, **Credit Magnet**, **Pulse Blaster**, **Credit Boost**), barra di avanzamento livelli (`0..5`), anteprima effetto attuale/successivo e acquisto immediato con crediti salvati. |
 | `components/PWAInstallButton.tsx` | Pulsante intelligente per l'installazione PWA: mostra il prompt nativo su Android/Desktop oppure apre una guida visiva dedicata per Safari su iPhone/iPad, nascondendosi automaticamente se l'app è già avviata in modalità `standalone`. |
@@ -106,7 +107,8 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 | File | Cosa fa |
 | :--- | :--- |
 | `utils/sound.ts` | Classe `SoundEngine` basata su Web Audio API: sintetizza gli effetti sonori senza file audio esterni, sblocca automaticamente `AudioContext` al primo input utente e gestisce lo stato `muted`. |
-| `utils/storage.ts` | Gestisce caricamento, validazione e salvataggio in `localStorage` (`neon_runner_progress_v2` con migrazione automatica del vecchio record) per `highScore`, `totalCredits`, `muted` e `upgrades`. |
+| `utils/storage.ts` | Gestisce caricamento, validazione e salvataggio in `localStorage` (`neon_runner_progress_v2` con migrazione automatica del vecchio record) per `highScore`, `totalCredits`, `muted`, `orientationMode` e `upgrades`. |
+| `hooks/useOrientation.ts` | Hook React che gestisce la modalità **Auto** / **Landscape** usando Fullscreen API e `screen.orientation.lock('landscape')` su Android/PWA, e mostra un avviso auto-chiudibile su iOS Safari quando è richiesta la rotazione manuale. |
 | `hooks/usePWAInstall.ts` | Hook React che rileva se l'app è già installata (`display-mode: standalone`), riconosce iOS Safari e cattura l'evento `beforeinstallprompt` per attivare l'installazione con un tap. |
 
 ---

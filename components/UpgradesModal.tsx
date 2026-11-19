@@ -23,10 +23,12 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
 }) => {
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#06070d]/85 p-4 backdrop-blur-md">
-      <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-xl border border-white/15 bg-[#0d1021] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+      <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col rounded-xl border border-white/15 bg-[#0d1021] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-2.5">
           <div>
-            <h2 className="font-display text-xl font-bold text-white">Runner Upgrades</h2>
+            <h2 className="font-display text-xl font-bold text-white [@media(max-height:500px)]:text-lg">
+              Runner Upgrades
+            </h2>
             <p className="text-xs text-slate-400">
               Available Credits:{' '}
               <span className="font-mono-num font-bold text-emerald-400">{progress.totalCredits}</span>
@@ -42,7 +44,7 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
           </button>
         </div>
 
-        <div className="grid gap-3 overflow-y-auto p-6 sm:grid-cols-2">
+        <div className="grid gap-3 overflow-y-auto p-6 sm:grid-cols-2 [@media(max-height:500px)]:grid-cols-2 [@media(max-height:500px)]:p-4">
           {UPGRADES_CATALOG.map((item) => {
             const level = progress.upgrades[item.id];
             const isMax = level >= item.maxLevel;
@@ -52,7 +54,7 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
             return (
               <div
                 key={item.id}
-                className="flex flex-col justify-between rounded-lg border border-white/10 bg-white/[0.03] p-4"
+                className="flex flex-col justify-between rounded-lg border border-white/10 bg-white/[0.03] p-4 [@media(max-height:500px)]:p-3"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2">
@@ -93,7 +95,7 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
                   type="button"
                   disabled={isMax || !canAfford}
                   onClick={() => onBuyUpgrade(item.id, cost)}
-                  className={`mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg px-4 py-2 text-xs font-bold transition whitespace-nowrap ${
+                  className={`mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg px-4 py-2 text-xs font-bold transition whitespace-nowrap [@media(max-height:500px)]:mt-3 ${
                     isMax
                       ? 'cursor-default border border-white/10 bg-white/5 text-slate-500'
                       : canAfford

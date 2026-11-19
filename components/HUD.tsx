@@ -25,11 +25,11 @@ const HUD: React.FC<HUDProps> = ({
   const magnetPct = buffs.magnetMax > 0 ? Math.min(100, (buffs.magnetRemaining / buffs.magnetMax) * 100) : 0;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-2 px-4 pt-3 sm:px-6 sm:pt-4">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-1.5 px-4 pt-3 sm:px-6 sm:pt-4 [@media(max-height:500px)]:pt-2">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col">
           <div className="flex items-baseline gap-3">
-            <span className="font-mono-num text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            <span className="font-mono-num text-2xl font-bold tracking-tight text-white sm:text-3xl [@media(max-height:500px)]:text-2xl">
               {score}m
             </span>
             <span className="font-mono-num text-xs font-medium text-cyan-300/80">
@@ -65,7 +65,7 @@ const HUD: React.FC<HUDProps> = ({
       </div>
 
       {(buffs.shieldRemaining > 0 || buffs.magnetRemaining > 0) && (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           {buffs.shieldRemaining > 0 && (
             <div className="flex items-center gap-2 rounded-md border border-cyan-400/30 bg-[#0d1021]/80 px-2.5 py-1 backdrop-blur-sm">
               <Shield className="h-3.5 w-3.5 text-cyan-400" />

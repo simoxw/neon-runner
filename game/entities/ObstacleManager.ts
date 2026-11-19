@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_CONFIG } from '../../constants';
+import { GAME_CONFIG, getGroundHeight } from '../../constants';
 import { Player } from './Player';
 
 export class ObstacleManager {
@@ -66,7 +66,7 @@ export class ObstacleManager {
         const baseY = (drone.getData('baseY') as number) || drone.y;
         const phase = (drone.getData('phase') as number) || 0;
         drone.setVelocityX(-speed * 1.12);
-        drone.y = baseY + Math.sin(time * 0.005 + phase) * 14;
+        drone.y = baseY + Math.sin(time * 0.005 + phase) * 12;
         if (drone.x < -100) {
           drone.disableBody(true, true);
         }
@@ -107,7 +107,7 @@ export class ObstacleManager {
       if (p && p.active) {
         const baseY = (p.getData('baseY') as number) || p.y;
         p.setVelocityX(-speed * 0.96);
-        p.y = baseY + Math.sin(time * 0.006) * 10;
+        p.y = baseY + Math.sin(time * 0.006) * 9;
         if (p.x < -100) {
           p.disableBody(true, true);
         }
@@ -130,15 +130,21 @@ export class ObstacleManager {
 
   private spawnPattern(speed: number): number {
     const { width, height } = this.scene.scale;
-    const groundTop = height - GAME_CONFIG.GROUND_HEIGHT;
+    const gh = getGroundHeight(height);
+    const groundTop = height - gh;
+    const safeTopY = Math.max(76, height * 0.21);
+    const usableHeight = Math.max(120, groundTop - safeTopY);
     const startX = width + 90;
 
-    // Periodic Shield or Magnet drop (~every 180m in pixels = ~2200px)
+    const clampY = (desiredY: number) => Math.max(safeTopY, Math.min(groundTop - 36, desiredY));
+
+    // Periodic Shield or Magnet drop (~every 180m)
     if (this.distanceSincePowerup >= GAME_CONFIG.POWERUP_INTERVAL_METERS * 14) {
       this.distanceSincePowerup = 0;
       const type = Phaser.Math.Between(0, 1) === 0 ? 'shield' : 'magnet';
-      this.spawnPowerup(startX + 40, groundTop - 130, type, speed);
-      this.spawnCoinArc(startX + 120, groundTop - 85, 3, speed);
+      const powerupY = clampY(groundTop - Math.min(125, usableHeight * 0.62));
+      this.spawnPowerup(startX + 40, powerupY, type, speed);
+      this.spawnCoinArc(startX + 120, clampY(groundTop - Math.min(82, usableHeight * 0.42)), 3, speed, safeTopY);
       return 220;
     }
 
@@ -147,32 +153,35 @@ export class ObstacleManager {
     if (roll < 28) {
       // Pattern 1: Single low barrier + rewarding coin arc overhead
       this.spawnBarrier(startX, groundTop, false, speed);
-      this.spawnCoinArc(startX - 45, groundTop - 95, 3, speed);
+      this.spawnCoinArc(startX - 45, clampY(groundTop - Math.min(92, usableHeight * 0.48)), 3, speed, safeTopY);
       return 120;
     } else if (roll < 52) {
       // Pattern 2: Tall barrier (encourages holding jump) + glide coin trail
       this.spawnBarrier(startX, groundTop, true, speed);
-      this.spawnCoinArc(startX + 55, groundTop - 145, 4, speed);
+      this.spawnCoinArc(startX + 55, clampY(groundTop - Math.min(138, usableHeight * 0.68)), 4, speed, safeTopY);
       return 190;
     } else if (roll < 76) {
       // Pattern 3: Destructible Cyber Drone(s) + coins behind
       const droneCount = speed > 560 ? 2 : 1;
+      const minDroneY = safeTopY + 14;
+      const maxDroneY = Math.max(minDroneY + 10, groundTop - 75);
       for (let i = 0; i < droneCount; i++) {
-        const dy = groundTop - Phaser.Math.Between(95, 165);
+        const dy = Phaser.Math.Between(minDroneY, maxDroneY);
         this.spawnDrone(startX + i * 165, dy, speed);
       }
-      this.spawnCoinLine(startX + 30, groundTop - 45, 3, speed);
+      this.spawnCoinLine(startX + 30, clampY(groundTop - 44), 3, speed);
       return droneCount === 2 ? 220 : 120;
     } else if (roll < 90) {
       // Pattern 4: Low barrier followed by hovering drone
       this.spawnBarrier(startX, groundTop, false, speed);
       const spacing = Math.max(250, speed * 0.52);
-      this.spawnDrone(startX + spacing, groundTop - 135, speed);
-      this.spawnCoinArc(startX + spacing * 0.45, groundTop - 135, 3, speed);
+      const droneY = clampY(groundTop - Math.min(130, usableHeight * 0.6));
+      this.spawnDrone(startX + spacing, droneY, speed);
+      this.spawnCoinArc(startX + spacing * 0.45, droneY, 3, speed, safeTopY);
       return spacing + 80;
     } else {
       // Pattern 5: Safe coin streak
-      this.spawnCoinLine(startX, groundTop - 50, 5, speed);
+      this.spawnCoinLine(startX, clampY(groundTop - 48), 5, speed);
       return 180;
     }
   }
@@ -215,10 +224,20 @@ export class ObstacleManager {
     }
   }
 
-  private spawnCoinArc(startX: number, peakBaseY: number, count: number, speed: number) {
+  private spawnCoinArc(
+    startX: number,
+    peakBaseY: number,
+    count: number,
+    speed: number,
+    safeTopY: number = 76
+  ) {
+    const arcLift = peakBaseY - safeTopY < 50 ? 24 : 42;
     for (let i = 0; i < count; i++) {
       const cx = startX + i * 44;
-      const cy = peakBaseY - Math.sin((i / Math.max(1, count - 1)) * Math.PI) * 42;
+      const cy = Math.max(
+        safeTopY + 10,
+        peakBaseY - Math.sin((i / Math.max(1, count - 1)) * Math.PI) * arcLift
+      );
       this.spawnSingleCoin(cx, cy, speed);
     }
   }
