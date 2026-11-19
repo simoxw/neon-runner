@@ -51,6 +51,15 @@ export class Preloader extends Phaser.Scene {
         repeat: -1,
       });
     }
+
+    if (!this.anims.exists('anim_missile')) {
+      this.anims.create({
+        key: 'anim_missile',
+        frames: [{ key: 'missile_0' }, { key: 'missile_1' }],
+        frameRate: 14,
+        repeat: -1,
+      });
+    }
   }
 
   private createProceduralTextures() {
@@ -63,6 +72,7 @@ export class Preloader extends Phaser.Scene {
     this.createDroneFrames();
     this.createCoinFrames();
     this.createPowerupTextures();
+    this.createMissileTextures();
     this.createParticleAndBulletTextures();
   }
 
@@ -474,6 +484,71 @@ export class Preloader extends Phaser.Scene {
     }
   }
 
+  private createMissileTextures() {
+    [0, 1].forEach((frame) => {
+      const key = `missile_${frame}`;
+      if (this.textures.exists(key)) return;
+      const canvas = this.textures.createCanvas(key, 56, 24);
+      if (!canvas) return;
+      const ctx = canvas.context;
+
+      // Exhaust flame on right
+      const flameLen = frame === 0 ? 16 : 11;
+      ctx.fillStyle = '#ffc857';
+      ctx.beginPath();
+      ctx.moveTo(40, 8);
+      ctx.lineTo(40 + flameLen, 12);
+      ctx.lineTo(40, 16);
+      ctx.closePath();
+      ctx.fill();
+
+      // Missile body pointing left
+      ctx.fillStyle = '#1e223d';
+      ctx.fillRect(14, 6, 26, 12);
+
+      // Red nose cone
+      ctx.fillStyle = '#ff2a6d';
+      ctx.beginPath();
+      ctx.moveTo(2, 12);
+      ctx.lineTo(15, 6);
+      ctx.lineTo(15, 18);
+      ctx.closePath();
+      ctx.fill();
+
+      // Warning stripe & fins
+      ctx.fillStyle = '#ffc857';
+      ctx.fillRect(22, 6, 5, 12);
+      ctx.fillStyle = '#ff2a6d';
+      ctx.fillRect(34, 2, 6, 5);
+      ctx.fillRect(34, 17, 6, 5);
+
+      canvas.refresh();
+    });
+
+    if (!this.textures.exists('missile_warning')) {
+      const canvas = this.textures.createCanvas('missile_warning', 38, 38);
+      if (canvas) {
+        const ctx = canvas.context;
+        ctx.fillStyle = 'rgba(255, 42, 109, 0.25)';
+        ctx.beginPath();
+        ctx.moveTo(19, 3);
+        ctx.lineTo(35, 33);
+        ctx.lineTo(3, 33);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#ff2a6d';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffc857';
+        ctx.fillRect(17, 12, 4, 12);
+        ctx.fillRect(17, 26, 4, 4);
+        canvas.refresh();
+      }
+    }
+  }
+
   private createParticleAndBulletTextures() {
     const createRadial = (key: string, inner: string, outer: string) => {
       if (this.textures.exists(key)) return;
@@ -488,7 +563,7 @@ export class Preloader extends Phaser.Scene {
       canvas.refresh();
     };
 
-    createRadial('particle', '#00f3ff', 'rgba(0, 243, 255, 0)');
+    createRadial('particle', '#ffffff', 'rgba(255, 255, 255, 0)');
     createRadial('spark_red', '#ff2a6d', 'rgba(255, 42, 109, 0)');
     createRadial('spark_yellow', '#ffc857', 'rgba(255, 200, 87, 0)');
 
@@ -496,7 +571,7 @@ export class Preloader extends Phaser.Scene {
       const canvas = this.textures.createCanvas('bullet', 26, 8);
       if (canvas) {
         const ctx = canvas.context;
-        ctx.fillStyle = '#00f3ff';
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 2, 14, 4);
         ctx.fillStyle = '#fff380';
         ctx.fillRect(10, 1, 16, 6);

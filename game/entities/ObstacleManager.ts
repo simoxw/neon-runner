@@ -1,16 +1,28 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG, getGroundHeight } from '../../constants';
+import { soundEngine } from '../../utils/sound';
 import { Player } from './Player';
+
+interface ActiveMissileWarning {
+  sprite: Phaser.GameObjects.Sprite;
+  targetY: number;
+  elapsedMs: number;
+  phase: 'tracking' | 'locked';
+}
 
 export class ObstacleManager {
   public scene: Phaser.Scene;
   public barriers: Phaser.Physics.Arcade.Group;
   public drones: Phaser.Physics.Arcade.Group;
+  public missiles: Phaser.Physics.Arcade.Group;
   public coins: Phaser.Physics.Arcade.Group;
   public powerups: Phaser.Physics.Arcade.Group;
 
   private distanceUntilNextPattern: number = 220;
   private distanceSincePowerup: number = 0;
+  private distanceSinceMissile: number = 0;
+  private nextMissileDistance: number = 1400;
+  private warnings: ActiveMissileWarning[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -23,6 +35,11 @@ export class ObstacleManager {
     this.drones = scene.physics.add.group({
       defaultKey: 'drone_0',
       maxSize: 12,
+    });
+
+    this.missiles = scene.physics.add.group({
+      defaultKey: 'missile_0',
+      maxSize: 6,
     });
 
     this.coins = scene.physics.add.group({
@@ -40,13 +57,15 @@ export class ObstacleManager {
     time: number,
     delta: number,
     speed: number,
-    player: Player | null
+    player: Player | null,
+    scoreMeters: number = 0
   ) {
     const dtSec = delta / 1000;
     const dx = speed * dtSec;
 
     this.distanceUntilNextPattern -= dx;
     this.distanceSincePowerup += dx;
+    this.distanceSinceMissile += dx;
 
     if (this.distanceUntilNextPattern <= 0) {
       const patternWidth = this.spawnPattern(speed);
@@ -55,8 +74,29 @@ export class ObstacleManager {
       this.distanceUntilNextPattern = patternWidth + Phaser.Math.Between(minSafeGap, maxGap);
     }
 
+    // Trigger Jetpack Joyride-style missile warning periodically after 80m
+    if (scoreMeters >= 80 && this.distanceSinceMissile >= this.nextMissileDistance && this.warnings.length === 0) {
+      this.distanceSinceMissile = 0;
+      this.nextMissileDistance = Phaser.Math.Between(1600, 2600);
+      this.triggerMissileWarning(player);
+    }
+
+    this.updateMissileWarnings(delta, speed, player);
+
     // Move barriers
     this.updateGroupMovement(this.barriers, speed);
+
+    // Move missiles faster than scroll speed
+    const missileChildren = this.missiles.getChildren();
+    for (let i = 0; i < missileChildren.length; i++) {
+      const m = missileChildren[i] as Phaser.Physics.Arcade.Sprite;
+      if (m && m.active) {
+        m.setVelocityX(-speed * 1.68);
+        if (m.x < -120) {
+          m.disableBody(true, true);
+        }
+      }
+    }
 
     // Move drones with slight sinusoidal hover
     const droneChildren = this.drones.getChildren();
@@ -74,8 +114,12 @@ export class ObstacleManager {
     }
 
     // Move coins + Magnet attraction
-    const magnetActive = Boolean(player && player.magnetRemaining > 0 && !player.isDead);
-    const magnetRadius = player ? player.getMagnetRadius() : 200;
+    const magnetActive = Boolean(player && (player.magnetRemaining > 0 || player.overdriveActive) && !player.isDead);
+    const magnetRadius = player
+      ? player.overdriveActive
+        ? Math.max(240, player.getMagnetRadius())
+        : player.getMagnetRadius()
+      : 200;
     const coinChildren = this.coins.getChildren();
 
     for (let i = 0; i < coinChildren.length; i++) {
@@ -85,7 +129,7 @@ export class ObstacleManager {
           const dist = Phaser.Math.Distance.Between(coin.x, coin.y, player.x, player.y);
           if (dist < magnetRadius) {
             const angle = Phaser.Math.Angle.Between(coin.x, coin.y, player.x, player.y);
-            const pullSpeed = Math.max(speed * 1.4, 680);
+            const pullSpeed = Math.max(speed * 1.45, 720);
             coin.setVelocity(Math.cos(angle) * pullSpeed, Math.sin(angle) * pullSpeed);
           } else {
             coin.setVelocity(-speed, 0);
@@ -112,6 +156,85 @@ export class ObstacleManager {
           p.disableBody(true, true);
         }
       }
+    }
+  }
+
+  private triggerMissileWarning(player: Player | null) {
+    const { width, height } = this.scene.scale;
+    const gh = getGroundHeight(height);
+    const groundTop = height - gh;
+    const safeTopY = Math.max(76, height * 0.21);
+    const initialY = player
+      ? Phaser.Math.Clamp(player.y, safeTopY, groundTop - 32)
+      : groundTop - 70;
+
+    const sprite = this.scene.add.sprite(width - 34, initialY, 'missile_warning');
+    sprite.setDepth(15);
+
+    this.warnings.push({
+      sprite,
+      targetY: initialY,
+      elapsedMs: 0,
+      phase: 'tracking',
+    });
+
+    soundEngine.playMissileWarning();
+  }
+
+  private updateMissileWarnings(delta: number, speed: number, player: Player | null) {
+    if (this.warnings.length === 0) return;
+
+    const { width, height } = this.scene.scale;
+    const gh = getGroundHeight(height);
+    const groundTop = height - gh;
+    const safeTopY = Math.max(76, height * 0.21);
+
+    for (let i = this.warnings.length - 1; i >= 0; i--) {
+      const w = this.warnings[i];
+      w.elapsedMs += delta;
+      w.sprite.x = width - 34;
+
+      if (w.phase === 'tracking') {
+        if (player) {
+          const clampedPlayerY = Phaser.Math.Clamp(player.y, safeTopY, groundTop - 32);
+          w.targetY = Phaser.Math.Linear(w.targetY, clampedPlayerY, Math.min(1, delta * 0.009));
+        }
+        w.sprite.y = w.targetY;
+        w.sprite.setAlpha(0.75 + Math.sin(w.elapsedMs * 0.02) * 0.25);
+
+        if (w.elapsedMs >= 750) {
+          w.phase = 'locked';
+        }
+      } else {
+        w.sprite.y = w.targetY;
+        const blink = Math.floor(w.elapsedMs / 55) % 2 === 0;
+        w.sprite.setAlpha(blink ? 1 : 0.25);
+        w.sprite.setScale(blink ? 1.18 : 0.95);
+
+        if (w.elapsedMs >= 1100) {
+          const launchY = w.targetY;
+          w.sprite.destroy();
+          this.warnings.splice(i, 1);
+          this.spawnMissile(width + 45, launchY, speed);
+        }
+      }
+    }
+  }
+
+  private spawnMissile(x: number, y: number, speed: number) {
+    const missile = this.missiles.get(x, y, 'missile_0') as Phaser.Physics.Arcade.Sprite | null;
+    if (missile) {
+      missile.enableBody(true, x, y, true, true);
+      missile.play('anim_missile', true);
+      if (missile.body) {
+        const body = missile.body as Phaser.Physics.Arcade.Body;
+        body.setAllowGravity(false);
+        body.immovable = true;
+        body.setSize(42, 16);
+        body.setOffset(4, 4);
+        missile.setVelocityX(-speed * 1.68);
+      }
+      soundEngine.playMissileLaunch();
     }
   }
 
@@ -288,10 +411,18 @@ export class ObstacleManager {
 
     deactivateAll(this.barriers);
     deactivateAll(this.drones);
+    deactivateAll(this.missiles);
     deactivateAll(this.coins);
     deactivateAll(this.powerups);
 
+    for (let i = 0; i < this.warnings.length; i++) {
+      this.warnings[i].sprite.destroy();
+    }
+    this.warnings = [];
+
     this.distanceUntilNextPattern = 200;
     this.distanceSincePowerup = 0;
+    this.distanceSinceMissile = 0;
+    this.nextMissileDistance = 1400;
   }
 }

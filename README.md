@@ -11,20 +11,21 @@ Endless runner cyberpunk ad alta velocità sviluppato con **Phaser 3**, **React 
   - **Pressione prolungata**: spinta verticale estesa fino alla quota massima per scavalcare barriere alte e raccogliere archi di crediti.
   - **Planata fluida (Glide)**: continuando a tenere premuto durante la discesa si attivano i propulsori, rallentando la caduta con controllo preciso.
   - **Coyote Time & Jump Buffering**: tolleranza in uscita dalle piattaforme e pre-caricamento del salto poco prima dell'atterraggio.
-- **Ostacoli Fissi vs Cyber Drones**:
+- **Ostacoli, Cyber Drones & Missili**:
   - Le **barriere laser** (basse e alte) sono indistruttibili e vanno superate saltando.
   - I **Cyber Drones** volanti vengono abbattuti dal blaster automatico del runner rilasciando esplosioni e **crediti bonus**.
-- **Power-Up Raccoglibili**:
+  - I **Missili in arrivo** mostrano prima un segnalatore di pericolo sul bordo destro che insegue l'altezza del runner, si aggancia lampeggiando e poi parte ad alta velocità.
+- **Hyper Overdrive & Power-Up**:
+  - **Barra Overdrive**: raccogliendo crediti e abbattendo droni si carica la barra Overdrive; al 100% attiva 5,5 secondi di **corsa invincibile ad alta velocità** che sfonda barriere, droni e missili generando crediti extra.
   - **Energy Shield**: assorbe un impatto fatale attivando brevi frame di invulnerabilità.
   - **Credit Magnet**: attira automaticamente tutti i crediti nel raggio d'azione.
-- **Progressione & Potenziamenti Persistenti**:
-  - Record personale (`highScore`), portafoglio **Credits**, preferenza audio e livelli di 4 upgrade (**Energy Shield**, **Credit Magnet**, **Pulse Blaster**, **Credit Boost**) vengono salvati automaticamente in `localStorage`.
+- **Settori Dinamici & Officina (Upgrades & Skins)**:
+  - Ogni **300 metri** l'ambiente cambia settore (`Cyber Cyan`, `Crimson Grid`, `Solar Amber`, `Ultraviolet Core`) con transizione cromatica fluida di cielo, città e pavimento.
+  - Record personale (`highScore`), portafoglio **Credits**, 4 upgrade (**Energy Shield**, **Credit Magnet**, **Pulse Blaster**, **Credit Boost**) e **5 Skin cromatiche** sbloccabili per il runner sono salvati automaticamente in `localStorage`.
 - **Audio Sintetico Zero-Dipendenze**:
-  - Effetti sonori generati in tempo reale tramite **Web Audio API** (salto, planata, sparo, esplosioni, monete, power-up, rottura scudo, game over) con tasto **Mute** nell'HUD e nel menu.
-- **Responsive Mobile & PWA Offline**:
-  - Ridimensionamento dinamico del canvas Phaser su rotazione schermo o cambio finestra.
-  - Asset grafici generati proceduralmente su canvas (nessun asset esterno fragile).
-  - Precache completo tramite Service Worker (`vite-plugin-pwa`).
+  - Effetti sonori generati in tempo reale tramite **Web Audio API** (salto, planata, sparo, avviso e lancio missile, overdrive smash, cambio settore, esplosioni, monete, power-up, game over) con tasto **Mute** nell'HUD e nel menu.
+- **Responsive Mobile, Orientamento & PWA Offline**:
+  - Supporto sia verticale che **Orizzontale (Landscape)** dal menu con Fullscreen nativo su Android e guida rapida su iOS, ricalibrazione dinamica del canvas Phaser e aggiornamento automatico Service Worker con banner nel menu.
 
 ---
 

@@ -7,6 +7,8 @@ export enum GameState {
 
 export type OrientationMode = 'auto' | 'landscape';
 
+export type SkinId = 'cyan' | 'crimson' | 'solar' | 'emerald' | 'violet';
+
 export type UpgradeId =
   | 'shieldDuration'
   | 'magnetDuration'
@@ -18,6 +20,8 @@ export interface PlayerProgress {
   totalCredits: number;
   muted: boolean;
   orientationMode: OrientationMode;
+  unlockedSkins: SkinId[];
+  equippedSkin: SkinId;
   upgrades: Record<UpgradeId, number>;
 }
 
@@ -26,6 +30,10 @@ export interface ActiveBuffs {
   shieldMax: number;
   magnetRemaining: number;
   magnetMax: number;
+  overdriveCharge: number;
+  overdriveActive: boolean;
+  overdriveRemaining: number;
+  overdriveMax: number;
 }
 
 export interface RunTelemetry {
@@ -33,4 +41,6 @@ export interface RunTelemetry {
   runCredits: number;
   dronesDestroyed: number;
   speedMultiplier: number;
+  sectorNumber: number;
+  sectorName: string;
 }

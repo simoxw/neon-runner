@@ -4,19 +4,41 @@ import HUD from './components/HUD.tsx';
 import Menu from './components/Menu.tsx';
 import PauseModal from './components/PauseModal.tsx';
 import UpgradesModal from './components/UpgradesModal.tsx';
-import { getUpgradeCost, UPGRADES_CATALOG } from './constants.ts';
+import {
+  GAME_CONFIG,
+  getUpgradeCost,
+  SECTORS_PALETTE,
+  SKINS_CATALOG,
+  UPGRADES_CATALOG,
+} from './constants.ts';
 import PhaserGame from './game/PhaserGame.tsx';
 import { useOrientation } from './hooks/useOrientation.ts';
 import { usePWAUpdate } from './hooks/usePWAUpdate.ts';
-import { ActiveBuffs, GameState, OrientationMode, PlayerProgress, UpgradeId } from './types.ts';
+import {
+  ActiveBuffs,
+  GameState,
+  OrientationMode,
+  PlayerProgress,
+  SkinId,
+  UpgradeId,
+} from './types.ts';
 import { soundEngine } from './utils/sound.ts';
-import { loadProgress, saveProgress, updateUpgradeLevel } from './utils/storage.ts';
+import {
+  loadProgress,
+  saveProgress,
+  unlockAndEquipSkin,
+  updateUpgradeLevel,
+} from './utils/storage.ts';
 
 const EMPTY_BUFFS: ActiveBuffs = {
   shieldRemaining: 0,
   shieldMax: 0,
   magnetRemaining: 0,
   magnetMax: 0,
+  overdriveCharge: 0,
+  overdriveActive: false,
+  overdriveRemaining: 0,
+  overdriveMax: GAME_CONFIG.OVERDRIVE_DURATION_MS,
 };
 
 const App: React.FC = () => {
@@ -33,6 +55,8 @@ const App: React.FC = () => {
   const [runCredits, setRunCredits] = useState(0);
   const [dronesDestroyed, setDronesDestroyed] = useState(0);
   const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
+  const [sectorNumber, setSectorNumber] = useState(1);
+  const [sectorName, setSectorName] = useState(SECTORS_PALETTE[0].name);
   const [buffs, setBuffs] = useState<ActiveBuffs>(EMPTY_BUFFS);
   const [isNewRecord, setIsNewRecord] = useState(false);
 
@@ -43,10 +67,15 @@ const App: React.FC = () => {
   progressRef.current = progress;
 
   const canAffordUpgrade = useMemo(() => {
-    return UPGRADES_CATALOG.some((item) => {
+    const canUpgrade = UPGRADES_CATALOG.some((item) => {
       const level = progress.upgrades[item.id];
       return level < item.maxLevel && progress.totalCredits >= getUpgradeCost(item, level);
     });
+    const canUnlockSkin = SKINS_CATALOG.some(
+      (skin) =>
+        !progress.unlockedSkins.includes(skin.id) && progress.totalCredits >= skin.cost
+    );
+    return canUpgrade || canUnlockSkin;
   }, [progress]);
 
   const handleGameEvent = useCallback((event: string, data: Record<string, unknown>) => {
@@ -59,6 +88,10 @@ const App: React.FC = () => {
         setSpeedMultiplier(
           typeof data?.speedMultiplier === 'number' ? data.speedMultiplier : 1.0
         );
+        setSectorNumber(typeof data?.sectorNumber === 'number' ? data.sectorNumber : 1);
+        setSectorName(
+          typeof data?.sectorName === 'string' ? data.sectorName : SECTORS_PALETTE[0].name
+        );
         setIsNewRecord(false);
         setBuffs(EMPTY_BUFFS);
         break;
@@ -68,6 +101,8 @@ const App: React.FC = () => {
         if (typeof data?.runCredits === 'number') setRunCredits(data.runCredits);
         if (typeof data?.dronesDestroyed === 'number') setDronesDestroyed(data.dronesDestroyed);
         if (typeof data?.speedMultiplier === 'number') setSpeedMultiplier(data.speedMultiplier);
+        if (typeof data?.sectorNumber === 'number') setSectorNumber(data.sectorNumber);
+        if (typeof data?.sectorName === 'string') setSectorName(data.sectorName);
         break;
 
       case 'BUFF_UPDATE':
@@ -76,6 +111,14 @@ const App: React.FC = () => {
           shieldMax: typeof data?.shieldMax === 'number' ? data.shieldMax : 0,
           magnetRemaining: typeof data?.magnetRemaining === 'number' ? data.magnetRemaining : 0,
           magnetMax: typeof data?.magnetMax === 'number' ? data.magnetMax : 0,
+          overdriveCharge: typeof data?.overdriveCharge === 'number' ? data.overdriveCharge : 0,
+          overdriveActive: Boolean(data?.overdriveActive),
+          overdriveRemaining:
+            typeof data?.overdriveRemaining === 'number' ? data.overdriveRemaining : 0,
+          overdriveMax:
+            typeof data?.overdriveMax === 'number'
+              ? data.overdriveMax
+              : GAME_CONFIG.OVERDRIVE_DURATION_MS,
         });
         break;
 
@@ -163,12 +206,24 @@ const App: React.FC = () => {
   const quitToMenu = () => {
     setShowUpgrades(false);
     setGameState(GameState.MENU);
+    setSectorNumber(1);
+    setSectorName(SECTORS_PALETTE[0].name);
     window.dispatchEvent(new CustomEvent('PHASER_MENU'));
   };
 
   const handleBuyUpgrade = (id: UpgradeId, cost: number) => {
     soundEngine.unlock();
     const next = updateUpgradeLevel(progress, id, cost);
+    if (next) {
+      soundEngine.playUpgrade();
+      setProgress(next);
+      window.dispatchEvent(new CustomEvent('PHASER_SYNC_PROGRESS'));
+    }
+  };
+
+  const handleUnlockOrEquipSkin = (skinId: SkinId, cost: number) => {
+    soundEngine.unlock();
+    const next = unlockAndEquipSkin(progress, skinId, cost);
     if (next) {
       soundEngine.playUpgrade();
       setProgress(next);
@@ -204,6 +259,8 @@ const App: React.FC = () => {
           score={score}
           runCredits={runCredits}
           speedMultiplier={speedMultiplier}
+          sectorNumber={sectorNumber}
+          sectorName={sectorName}
           buffs={buffs}
           muted={progress.muted}
           onToggleMute={toggleMute}
@@ -241,6 +298,7 @@ const App: React.FC = () => {
         <UpgradesModal
           progress={progress}
           onBuyUpgrade={handleBuyUpgrade}
+          onUnlockOrEquipSkin={handleUnlockOrEquipSkin}
           onClose={() => setShowUpgrades(false)}
         />
       )}

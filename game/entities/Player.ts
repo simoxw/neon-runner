@@ -3,7 +3,9 @@ import {
   GAME_CONFIG,
   getBlasterCooldownMs,
   getMagnetRadiusPx,
+  getSkinConfig,
 } from '../../constants';
+import { SkinId } from '../../types';
 import { soundEngine } from '../../utils/sound';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -11,6 +13,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public particles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   public shieldRing: Phaser.GameObjects.Arc;
   public magnetRing: Phaser.GameObjects.Arc;
+  public overdriveRing: Phaser.GameObjects.Arc;
 
   public isHoldingJump: boolean = false;
   public isJumping: boolean = false;
@@ -28,8 +31,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public magnetRemaining: number = 0;
   public magnetMax: number = 7000;
 
+  public overdriveCharge: number = 0;
+  public overdriveRemaining: number = 0;
+  public overdriveMax: number = GAME_CONFIG.OVERDRIVE_DURATION_MS;
+
   public blasterLevel: number = 0;
   public magnetLevel: number = 0;
+  public skinId: SkinId = 'cyan';
 
   private isPausedSupplier: () => boolean;
   private onBuffChange: () => void;
@@ -59,7 +67,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.body.setOffset(10, 10);
     }
 
-    // Aura rings for Shield and Magnet
+    // Aura rings for Overdrive, Magnet, and Shield
+    this.overdriveRing = scene.add.circle(x, y, 48, 0xffc857, 0.2);
+    this.overdriveRing.setStrokeStyle(3, 0xffc857, 0.95);
+    this.overdriveRing.setVisible(false);
+
     this.magnetRing = scene.add.circle(x, y, 42, 0xffc857, 0.08);
     this.magnetRing.setStrokeStyle(2, 0xffc857, 0.65);
     this.magnetRing.setVisible(false);
@@ -85,12 +97,38 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.particles.startFollow(this, -16, 10);
     }
 
+    this.applySkinVisuals();
     this.play('anim_player_run');
+  }
+
+  public get overdriveActive(): boolean {
+    return this.overdriveRemaining > 0;
   }
 
   public setUpgradeLevels(blasterLevel: number, magnetLevel: number) {
     this.blasterLevel = blasterLevel;
     this.magnetLevel = magnetLevel;
+  }
+
+  public setSkin(skinId: SkinId) {
+    this.skinId = skinId;
+    this.applySkinVisuals();
+  }
+
+  private applySkinVisuals() {
+    if (this.isDead) return;
+    const skin = getSkinConfig(this.skinId);
+    if (this.overdriveActive) {
+      this.setTint(0xffe066);
+      if (this.particles) this.particles.particleTint = 0xffc857;
+    } else {
+      if (skin.bodyTint === 0xffffff) {
+        this.clearTint();
+      } else {
+        this.setTint(skin.bodyTint);
+      }
+      if (this.particles) this.particles.particleTint = skin.trailTint;
+    }
   }
 
   public getMagnetRadius(): number {
@@ -117,7 +155,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.body.velocity.y *= GAME_CONFIG.PLAYER_JUMP_CUT_MULTIPLIER;
     }
 
-    if (this.particles && this.particles.emitting) {
+    if (this.particles && this.particles.emitting && !this.overdriveActive) {
       this.particles.stop();
     }
   }
@@ -152,6 +190,27 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.onBuffChange();
   }
 
+  public addOverdriveCharge(amount: number) {
+    if (this.isDead || this.overdriveActive) return;
+    this.overdriveCharge = Math.min(100, this.overdriveCharge + amount);
+    if (this.overdriveCharge >= 100) {
+      this.activateOverdrive();
+    } else {
+      this.onBuffChange();
+    }
+  }
+
+  public activateOverdrive() {
+    this.overdriveCharge = 0;
+    this.overdriveMax = GAME_CONFIG.OVERDRIVE_DURATION_MS;
+    this.overdriveRemaining = this.overdriveMax;
+    this.setScale(1.18);
+    this.overdriveRing.setVisible(true);
+    this.applySkinVisuals();
+    soundEngine.playOverdriveStart();
+    this.onBuffChange();
+  }
+
   public consumeShield(now: number): boolean {
     if (this.shieldRemaining <= 0) return false;
     this.shieldRemaining = 0;
@@ -163,11 +222,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   public isInvulnerable(now: number): boolean {
-    return now < this.invulnUntil;
+    return now < this.invulnUntil || this.overdriveActive;
   }
 
   update(time: number, delta: number, isRunning: boolean) {
-    // Sync aura ring positions
+    this.overdriveRing.setPosition(this.x, this.y);
     this.shieldRing.setPosition(this.x, this.y);
     this.magnetRing.setPosition(this.x, this.y);
 
@@ -180,7 +239,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.isJumping = false;
       }
 
-      // Jump buffer: if user tapped slightly before landing, jump right away
       if (isRunning && time - this.jumpPressedTime <= GAME_CONFIG.JUMP_BUFFER_MS) {
         this.executeJump();
       }
@@ -216,7 +274,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       soundEngine.playGlidePulse(time);
     } else {
       this.isGliding = false;
-      if (this.particles && this.particles.emitting) {
+      if (this.overdriveActive) {
+        if (this.particles && !this.particles.emitting) {
+          this.particles.start();
+        }
+      } else if (this.particles && this.particles.emitting) {
         this.particles.stop();
       }
     }
@@ -236,8 +298,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.play('anim_player_run', true);
     }
 
-    // Invulnerability flicker
-    if (time < this.invulnUntil) {
+    // Invulnerability flicker (when not in overdrive)
+    if (!this.overdriveActive && time < this.invulnUntil) {
       this.setAlpha(Math.floor(time / 70) % 2 === 0 ? 0.45 : 1);
     } else if (this.alpha !== 1) {
       this.setAlpha(1);
@@ -247,6 +309,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Buff countdowns
     let buffChanged = false;
+
+    if (this.overdriveRemaining > 0) {
+      this.overdriveRemaining = Math.max(0, this.overdriveRemaining - delta);
+      const pulse = 1 + Math.sin(time * 0.018) * 0.1;
+      this.overdriveRing.setScale(pulse);
+      if (this.overdriveRemaining < 1200) {
+        this.overdriveRing.setAlpha(Math.floor(time / 70) % 2 === 0 ? 0.3 : 0.9);
+      } else {
+        this.overdriveRing.setAlpha(0.9);
+      }
+
+      if (this.overdriveRemaining === 0) {
+        this.overdriveRing.setVisible(false);
+        this.setScale(1);
+        this.invulnUntil = time + 1000;
+        this.applySkinVisuals();
+        buffChanged = true;
+      }
+    }
+
     if (this.shieldRemaining > 0) {
       this.shieldRemaining = Math.max(0, this.shieldRemaining - delta);
       const pulse = 1 + Math.sin(time * 0.01) * 0.06;
@@ -299,7 +381,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (!this.bullets || !this.active || this.isDead) return;
     const bullet = this.bullets.get(this.x + 28, this.y - 2, 'bullet') as Phaser.Physics.Arcade.Sprite | null;
     if (bullet) {
+      const skin = getSkinConfig(this.skinId);
       bullet.enableBody(true, this.x + 28, this.y - 2, true, true);
+      bullet.setTint(this.overdriveActive ? 0xffc857 : skin.bulletTint);
       if (bullet.body) {
         const body = bullet.body as Phaser.Physics.Arcade.Body;
         body.setAllowGravity(false);
@@ -314,12 +398,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.isHoldingJump = false;
     this.isGliding = false;
     this.stop();
+    this.setScale(1);
     this.setTint(0xff2a6d);
     this.setVelocity(0, 0);
     this.shieldRemaining = 0;
     this.magnetRemaining = 0;
+    this.overdriveRemaining = 0;
+    this.overdriveCharge = 0;
     this.shieldRing.setVisible(false);
     this.magnetRing.setVisible(false);
+    this.overdriveRing.setVisible(false);
     if (this.particles && this.particles.emitting) {
       this.particles.stop();
     }
@@ -335,14 +423,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.invulnUntil = 0;
     this.shieldRemaining = 0;
     this.magnetRemaining = 0;
+    this.overdriveRemaining = 0;
+    this.overdriveCharge = 0;
 
     this.setActive(true).setVisible(true);
+    this.setScale(1);
     this.setPosition(x, y);
-    this.clearTint();
     this.setAlpha(1);
     this.setVelocity(0, 0);
     this.shieldRing.setVisible(false);
     this.magnetRing.setVisible(false);
+    this.overdriveRing.setVisible(false);
+    this.applySkinVisuals();
     this.play('anim_player_run', true);
 
     if (this.particles && this.particles.emitting) {
