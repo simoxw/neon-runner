@@ -1,9 +1,41 @@
-import { OrientationMode, PlayerProgress, SkinId, UpgradeId } from '../types';
+import { createMissionFromSeed } from '../constants';
+import {
+  ActiveMission,
+  MissionType,
+  OrientationMode,
+  PlayerProgress,
+  SkinId,
+  UpgradeId,
+} from '../types';
 
 const STORAGE_KEY = 'neon_runner_progress_v2';
 const LEGACY_HIGHSCORE_KEY = 'neon_runner_highscore';
 
 const VALID_SKINS: SkinId[] = ['cyan', 'crimson', 'solar', 'emerald', 'violet'];
+const VALID_MISSION_TYPES: MissionType[] = [
+  'distance',
+  'drones',
+  'credits',
+  'doubleJumps',
+  'fastFalls',
+  'overdrive',
+];
+
+function createInitialMissions(startSeed: number = 0): {
+  missions: ActiveMission[];
+  nextSeed: number;
+} {
+  const missions: ActiveMission[] = [];
+  let seed = startSeed;
+  while (missions.length < 3) {
+    const usedTypes = missions.map((m) => m.type);
+    missions.push(createMissionFromSeed(seed, usedTypes));
+    seed += 1;
+  }
+  return { missions, nextSeed: seed };
+}
+
+const INITIAL_MISSION_BATCH = createInitialMissions(0);
 
 const DEFAULT_PROGRESS: PlayerProgress = {
   highScore: 0,
@@ -18,6 +50,8 @@ const DEFAULT_PROGRESS: PlayerProgress = {
     blasterRate: 0,
     creditMultiplier: 0,
   },
+  missions: INITIAL_MISSION_BATCH.missions,
+  missionSeed: INITIAL_MISSION_BATCH.nextSeed,
 };
 
 function sanitizeOrientation(val: unknown): OrientationMode {
@@ -32,13 +66,91 @@ function sanitizeSkinId(val: unknown): SkinId {
 
 function sanitizeUnlockedSkins(val: unknown): SkinId[] {
   if (!Array.isArray(val)) return ['cyan'];
-  const filtered = val.filter((item): item is SkinId =>
-    typeof item === 'string' && VALID_SKINS.includes(item as SkinId)
+  const filtered = val.filter(
+    (item): item is SkinId =>
+      typeof item === 'string' && VALID_SKINS.includes(item as SkinId)
   );
   if (!filtered.includes('cyan')) {
     filtered.unshift('cyan');
   }
   return Array.from(new Set(filtered));
+}
+
+function sanitizeMissions(
+  val: unknown,
+  seedVal: unknown
+): { missions: ActiveMission[]; missionSeed: number } {
+  let nextSeed =
+    typeof seedVal === 'number' && Number.isFinite(seedVal) && seedVal >= 0
+      ? Math.floor(seedVal)
+      : 3;
+
+  if (!Array.isArray(val)) {
+    const fresh = createInitialMissions(0);
+    return { missions: fresh.missions, missionSeed: fresh.nextSeed };
+  }
+
+  const valid: ActiveMission[] = [];
+  for (const item of val) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof (item as ActiveMission).id === 'string' &&
+      VALID_MISSION_TYPES.includes((item as ActiveMission).type) &&
+      typeof (item as ActiveMission).label === 'string' &&
+      typeof (item as ActiveMission).target === 'number' &&
+      (item as ActiveMission).target > 0 &&
+      typeof (item as ActiveMission).reward === 'number'
+    ) {
+      const m = item as ActiveMission;
+      const clampedProgress = Math.max(
+        0,
+        Math.min(m.target, typeof m.progress === 'number' ? m.progress : 0)
+      );
+      valid.push({
+        id: m.id,
+        type: m.type,
+        label: m.label,
+        target: m.target,
+        progress: clampedProgress,
+        reward: m.reward,
+        completed: Boolean(m.completed) || clampedProgress >= m.target,
+      });
+    }
+    if (valid.length >= 3) break;
+  }
+
+  while (valid.length < 3) {
+    const usedTypes = valid.map((m) => m.type);
+    valid.push(createMissionFromSeed(nextSeed, usedTypes));
+    nextSeed += 1;
+  }
+
+  return { missions: valid, missionSeed: nextSeed };
+}
+
+export function refreshCompletedMissions(progress: PlayerProgress): PlayerProgress {
+  let nextSeed = progress.missionSeed;
+  const activeTypes = progress.missions.filter((m) => !m.completed).map((m) => m.type);
+  let changed = false;
+
+  const updatedMissions = progress.missions.map((mission) => {
+    if (!mission.completed) return mission;
+    changed = true;
+    const replacement = createMissionFromSeed(nextSeed, activeTypes);
+    activeTypes.push(replacement.type);
+    nextSeed += 1;
+    return replacement;
+  });
+
+  if (!changed) return progress;
+  const next: PlayerProgress = {
+    ...progress,
+    missions: updatedMissions,
+    missionSeed: nextSeed,
+  };
+  saveProgress(next);
+  return next;
 }
 
 export function loadProgress(): PlayerProgress {
@@ -49,6 +161,7 @@ export function loadProgress(): PlayerProgress {
       const unlocked = sanitizeUnlockedSkins(parsed.unlockedSkins);
       const equippedCandidate = sanitizeSkinId(parsed.equippedSkin);
       const equipped = unlocked.includes(equippedCandidate) ? equippedCandidate : 'cyan';
+      const missionState = sanitizeMissions(parsed.missions, parsed.missionSeed);
 
       return {
         highScore: typeof parsed.highScore === 'number' ? parsed.highScore : 0,
@@ -63,21 +176,29 @@ export function loadProgress(): PlayerProgress {
           blasterRate: sanitizeLevel(parsed.upgrades?.blasterRate),
           creditMultiplier: sanitizeLevel(parsed.upgrades?.creditMultiplier),
         },
+        missions: missionState.missions,
+        missionSeed: missionState.missionSeed,
       };
     }
 
     const legacyScore = parseInt(localStorage.getItem(LEGACY_HIGHSCORE_KEY) || '0', 10);
+    const fresh = createInitialMissions(0);
     return {
       ...DEFAULT_PROGRESS,
       unlockedSkins: ['cyan'],
       upgrades: { ...DEFAULT_PROGRESS.upgrades },
+      missions: fresh.missions,
+      missionSeed: fresh.nextSeed,
       highScore: Number.isFinite(legacyScore) && legacyScore > 0 ? legacyScore : 0,
     };
   } catch {
+    const fresh = createInitialMissions(0);
     return {
       ...DEFAULT_PROGRESS,
       unlockedSkins: ['cyan'],
       upgrades: { ...DEFAULT_PROGRESS.upgrades },
+      missions: fresh.missions,
+      missionSeed: fresh.nextSeed,
     };
   }
 }

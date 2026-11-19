@@ -1,9 +1,11 @@
-import { SkinId, UpgradeId } from './types';
+import { ActiveMission, MissionType, SkinId, UpgradeId } from './types';
 
 export const GAME_CONFIG = {
   GRAVITY: 1550,
   PLAYER_JUMP_INITIAL: -460,
   PLAYER_JUMP_HOLD_ACCEL: -1450,
+  DOUBLE_JUMP_VELOCITY: -490,
+  FAST_FALL_VELOCITY: 860,
   MAX_JUMP_HOLD_MS: 240,
   PLAYER_JUMP_CUT_MULTIPLIER: 0.52,
   COYOTE_TIME_MS: 95,
@@ -19,8 +21,9 @@ export const GAME_CONFIG = {
   POWERUP_INTERVAL_METERS: 180,
   OVERDRIVE_DURATION_MS: 5500,
   OVERDRIVE_SPEED_BONUS: 240,
-  OVERDRIVE_CHARGE_PER_COIN: 5,
-  OVERDRIVE_CHARGE_PER_DRONE: 14,
+  OVERDRIVE_CHARGE_PER_COIN: 2,
+  OVERDRIVE_CHARGE_PER_DRONE: 6,
+  MISSILE_SPEED_MULTIPLIER: 1.2,
   SECTOR_INTERVAL_METERS: 300,
 };
 
@@ -133,6 +136,75 @@ export const SKINS_CATALOG: SkinConfig[] = [
 
 export function getSkinConfig(id: SkinId): SkinConfig {
   return SKINS_CATALOG.find((s) => s.id === id) || SKINS_CATALOG[0];
+}
+
+interface MissionTemplate {
+  type: MissionType;
+  targets: number[];
+  rewards: number[];
+  formatLabel: (target: number) => string;
+}
+
+const MISSION_TEMPLATES: MissionTemplate[] = [
+  {
+    type: 'distance',
+    targets: [600, 1000, 1600, 2400],
+    rewards: [30, 40, 55, 70],
+    formatLabel: (target) => `Sprint ${target}m total`,
+  },
+  {
+    type: 'drones',
+    targets: [8, 14, 22, 30],
+    rewards: [30, 45, 60, 75],
+    formatLabel: (target) => `Destroy ${target} Cyber Drones`,
+  },
+  {
+    type: 'credits',
+    targets: [50, 85, 130, 180],
+    rewards: [25, 35, 50, 65],
+    formatLabel: (target) => `Collect ${target} Credits`,
+  },
+  {
+    type: 'doubleJumps',
+    targets: [10, 18, 28, 40],
+    rewards: [25, 35, 45, 60],
+    formatLabel: (target) => `Perform ${target} Double Jumps`,
+  },
+  {
+    type: 'fastFalls',
+    targets: [6, 12, 18, 26],
+    rewards: [25, 35, 50, 65],
+    formatLabel: (target) => `Execute ${target} Fast-Falls`,
+  },
+  {
+    type: 'overdrive',
+    targets: [1, 2, 3, 4],
+    rewards: [35, 55, 75, 95],
+    formatLabel: (target) =>
+      target === 1 ? 'Trigger Hyper Overdrive once' : `Trigger Hyper Overdrive ${target} times`,
+  },
+];
+
+export function createMissionFromSeed(
+  seed: number,
+  excludedTypes: MissionType[] = []
+): ActiveMission {
+  const candidates = MISSION_TEMPLATES.filter((t) => !excludedTypes.includes(t.type));
+  const pool = candidates.length > 0 ? candidates : MISSION_TEMPLATES;
+  const template = pool[Math.abs(seed) % pool.length];
+  const tier = Math.min(template.targets.length - 1, Math.floor(Math.abs(seed) / 6));
+  const target = template.targets[tier];
+  const reward = template.rewards[tier];
+
+  return {
+    id: `m_${seed}_${template.type}`,
+    type: template.type,
+    label: template.formatLabel(target),
+    target,
+    progress: 0,
+    reward,
+    completed: false,
+  };
 }
 
 export interface UpgradeConfig {

@@ -18,6 +18,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public isHoldingJump: boolean = false;
   public isJumping: boolean = false;
   public isGliding: boolean = false;
+  public isFastFalling: boolean = false;
+  public hasDoubleJump: boolean = true;
   public isDead: boolean = false;
 
   public jumpHoldTimer: number = 0;
@@ -25,6 +27,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public jumpPressedTime: number = -9999;
   public nextFire: number = 0;
   public invulnUntil: number = 0;
+  private wasGrounded: boolean = true;
 
   public shieldRemaining: number = 0;
   public shieldMax: number = 6000;
@@ -35,12 +38,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public overdriveRemaining: number = 0;
   public overdriveMax: number = GAME_CONFIG.OVERDRIVE_DURATION_MS;
 
+  public doubleJumpsUsed: number = 0;
+  public fastFallsUsed: number = 0;
+  public overdrivesTriggered: number = 0;
+
   public blasterLevel: number = 0;
   public magnetLevel: number = 0;
   public skinId: SkinId = 'cyan';
 
   private isPausedSupplier: () => boolean;
   private onBuffChange: () => void;
+  private onStatsChange: () => void;
 
   declare public body: Phaser.Physics.Arcade.Body;
 
@@ -49,12 +57,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     x: number,
     y: number,
     isPausedSupplier: () => boolean,
-    onBuffChange: () => void
+    onBuffChange: () => void,
+    onStatsChange: () => void = () => {}
   ) {
     super(scene, x, y, 'player_run_0');
 
     this.isPausedSupplier = isPausedSupplier;
     this.onBuffChange = onBuffChange;
+    this.onStatsChange = onStatsChange;
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -143,6 +153,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (this.canJumpNow(now)) {
       this.executeJump();
+    } else if (this.body && !this.isGroundedNow() && this.hasDoubleJump) {
+      this.executeDoubleJump();
     }
   }
 
@@ -160,9 +172,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  public triggerFastFall() {
+    if (this.isDead || this.isPausedSupplier() || !this.body) return;
+    if (this.isGroundedNow() || this.isFastFalling) return;
+
+    this.isHoldingJump = false;
+    this.isGliding = false;
+    this.isJumping = false;
+    this.isFastFalling = true;
+    this.jumpPressedTime = -9999;
+
+    this.body.velocity.y = Math.max(this.body.velocity.y, GAME_CONFIG.FAST_FALL_VELOCITY);
+    this.setAngle(14);
+    this.fastFallsUsed += 1;
+
+    this.particles?.explode(8, this.x, this.y - 16);
+    soundEngine.playFastFall();
+    this.onStatsChange();
+  }
+
+  private isGroundedNow(): boolean {
+    return Boolean(this.body && (this.body.blocked.down || this.body.touching.down));
+  }
+
   private canJumpNow(now: number): boolean {
     if (!this.body) return false;
-    const isGrounded = this.body.blocked.down || this.body.touching.down;
+    const isGrounded = this.isGroundedNow();
     const withinCoyote = now - this.lastGroundedTime <= GAME_CONFIG.COYOTE_TIME_MS;
     return isGrounded || (withinCoyote && !this.isJumping);
   }
@@ -171,9 +206,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (!this.body) return;
     this.setVelocityY(GAME_CONFIG.PLAYER_JUMP_INITIAL);
     this.isJumping = true;
+    this.isFastFalling = false;
+    this.hasDoubleJump = true;
+    this.setAngle(0);
     this.jumpHoldTimer = 0;
     this.jumpPressedTime = -9999;
     soundEngine.playJump();
+  }
+
+  private executeDoubleJump() {
+    if (!this.body) return;
+    this.setVelocityY(GAME_CONFIG.DOUBLE_JUMP_VELOCITY);
+    this.hasDoubleJump = false;
+    this.isJumping = true;
+    this.isGliding = false;
+    this.isFastFalling = false;
+    this.setAngle(0);
+    this.jumpHoldTimer = GAME_CONFIG.MAX_JUMP_HOLD_MS;
+    this.jumpPressedTime = -9999;
+    this.doubleJumpsUsed += 1;
+
+    this.particles?.explode(12, this.x, this.y + 22);
+    soundEngine.playDoubleJump();
+    this.onStatsChange();
   }
 
   public activateShield(durationMs: number) {
@@ -204,11 +259,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.overdriveCharge = 0;
     this.overdriveMax = GAME_CONFIG.OVERDRIVE_DURATION_MS;
     this.overdriveRemaining = this.overdriveMax;
+    this.overdrivesTriggered += 1;
     this.setScale(1.18);
     this.overdriveRing.setVisible(true);
     this.applySkinVisuals();
     soundEngine.playOverdriveStart();
     this.onBuffChange();
+    this.onStatsChange();
   }
 
   public consumeShield(now: number): boolean {
@@ -232,9 +289,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (this.isDead) return;
 
-    const isGrounded = Boolean(this.body && (this.body.blocked.down || this.body.touching.down));
+    const isGrounded = this.isGroundedNow();
     if (isGrounded) {
+      if (!this.wasGrounded && this.isFastFalling) {
+        this.particles?.explode(10, this.x, this.y + 26);
+        soundEngine.playLand();
+      }
+      this.isFastFalling = false;
+      this.hasDoubleJump = true;
+      this.setAngle(0);
       this.lastGroundedTime = time;
+
       if (this.isJumping && this.body.velocity.y >= 0) {
         this.isJumping = false;
       }
@@ -243,8 +308,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.executeJump();
       }
     }
+    this.wasGrounded = isGrounded;
 
-    // Variable jump hold boost while ascending
+    // Variable jump hold boost while ascending on primary jump
     if (
       isRunning &&
       this.isHoldingJump &&
@@ -258,8 +324,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.body.velocity.y += GAME_CONFIG.PLAYER_JUMP_HOLD_ACCEL * dtSec;
     }
 
-    // Fluid thruster glide while holding during descent
-    if (isRunning && this.isHoldingJump && !isGrounded && this.body && this.body.velocity.y > 0) {
+    // Fluid thruster glide while holding during descent (unless fast-falling)
+    if (
+      isRunning &&
+      this.isHoldingJump &&
+      !this.isFastFalling &&
+      !isGrounded &&
+      this.body &&
+      this.body.velocity.y > 0
+    ) {
       this.isGliding = true;
       const dtSec = delta / 1000;
       const factor = 1 - Math.exp(-12 * dtSec);
@@ -274,7 +347,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       soundEngine.playGlidePulse(time);
     } else {
       this.isGliding = false;
-      if (this.overdriveActive) {
+      if (this.overdriveActive || this.isFastFalling) {
         if (this.particles && !this.particles.emitting) {
           this.particles.start();
         }
@@ -379,7 +452,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   shoot() {
     if (!this.bullets || !this.active || this.isDead) return;
-    const bullet = this.bullets.get(this.x + 28, this.y - 2, 'bullet') as Phaser.Physics.Arcade.Sprite | null;
+    const bullet = this.bullets.get(
+      this.x + 28,
+      this.y - 2,
+      'bullet'
+    ) as Phaser.Physics.Arcade.Sprite | null;
     if (bullet) {
       const skin = getSkinConfig(this.skinId);
       bullet.enableBody(true, this.x + 28, this.y - 2, true, true);
@@ -397,6 +474,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.isDead = true;
     this.isHoldingJump = false;
     this.isGliding = false;
+    this.isFastFalling = false;
+    this.setAngle(0);
     this.stop();
     this.setScale(1);
     this.setTint(0xff2a6d);
@@ -418,6 +497,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.isHoldingJump = false;
     this.isJumping = false;
     this.isGliding = false;
+    this.isFastFalling = false;
+    this.hasDoubleJump = true;
+    this.wasGrounded = true;
+    this.setAngle(0);
     this.jumpHoldTimer = 0;
     this.jumpPressedTime = -9999;
     this.invulnUntil = 0;
@@ -425,6 +508,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.magnetRemaining = 0;
     this.overdriveRemaining = 0;
     this.overdriveCharge = 0;
+    this.doubleJumpsUsed = 0;
+    this.fastFallsUsed = 0;
+    this.overdrivesTriggered = 0;
 
     this.setActive(true).setVisible(true);
     this.setScale(1);

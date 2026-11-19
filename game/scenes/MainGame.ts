@@ -69,12 +69,14 @@ export class MainGame extends Phaser.Scene {
       playerStartX,
       playerStartY,
       () => this.isPausedState,
-      () => this.emitBuffUpdate()
+      () => this.emitBuffUpdate(),
+      () => this.emitRunUpdate()
     );
     this.applyProgressToPlayer();
     this.physics.add.collider(this.player, this.groundBody);
 
     this.obstacleManager = new ObstacleManager(this);
+    this.physics.add.collider(this.player, this.obstacleManager.platforms);
 
     this.explosionEmitter = this.add.particles(0, 0, 'spark_yellow', {
       speed: { min: 80, max: 280 },
@@ -159,28 +161,57 @@ export class MainGame extends Phaser.Scene {
       );
     }
 
-    const onPointerDown = () => {
+    let pointerDownY = 0;
+    let swipeFastFallFired = false;
+
+    const onPointerDown = (pointer?: Phaser.Input.Pointer) => {
       if (!this.isStarted || this.isGameOver || this.isPausedState) return;
+      if (pointer) {
+        pointerDownY = pointer.y;
+        swipeFastFallFired = false;
+      }
       this.player?.handlePress(this.time.now);
     };
 
+    const onPointerMove = (pointer: Phaser.Input.Pointer) => {
+      if (!pointer.isDown || swipeFastFallFired) return;
+      if (!this.isStarted || this.isGameOver || this.isPausedState) return;
+      if (pointer.y - pointerDownY > 36) {
+        swipeFastFallFired = true;
+        this.player?.triggerFastFall();
+      }
+    };
+
     const onPointerUp = () => {
+      swipeFastFallFired = false;
       this.player?.handleRelease();
     };
 
+    const onFastFallKey = () => {
+      if (!this.isStarted || this.isGameOver || this.isPausedState) return;
+      this.player?.triggerFastFall();
+    };
+
     this.input.on('pointerdown', onPointerDown);
+    this.input.on('pointermove', onPointerMove);
     this.input.on('pointerup', onPointerUp);
     this.input.on('pointercancel', onPointerUp);
 
     const spaceKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     const upKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    const downKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
+    const sKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     const escKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const pKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P);
 
-    spaceKey?.on('down', onPointerDown);
+    const onJumpKeyDown = () => onPointerDown();
+
+    spaceKey?.on('down', onJumpKeyDown);
     spaceKey?.on('up', onPointerUp);
-    upKey?.on('down', onPointerDown);
+    upKey?.on('down', onJumpKeyDown);
     upKey?.on('up', onPointerUp);
+    downKey?.on('down', onFastFallKey);
+    sKey?.on('down', onFastFallKey);
 
     const togglePauseFromKey = () => {
       if (!this.isStarted || this.isGameOver) return;
@@ -216,12 +247,15 @@ export class MainGame extends Phaser.Scene {
 
     this.events.once('shutdown', () => {
       this.input.off('pointerdown', onPointerDown);
+      this.input.off('pointermove', onPointerMove);
       this.input.off('pointerup', onPointerUp);
       this.input.off('pointercancel', onPointerUp);
-      spaceKey?.off('down', onPointerDown);
+      spaceKey?.off('down', onJumpKeyDown);
       spaceKey?.off('up', onPointerUp);
-      upKey?.off('down', onPointerDown);
+      upKey?.off('down', onJumpKeyDown);
       upKey?.off('up', onPointerUp);
+      downKey?.off('down', onFastFallKey);
+      sKey?.off('down', onFastFallKey);
       escKey?.off('down', togglePauseFromKey);
       pKey?.off('down', togglePauseFromKey);
       this.scale.off('resize', this.handleResize, this);
@@ -488,6 +522,9 @@ export class MainGame extends Phaser.Scene {
       score: this.score,
       runCredits: this.runCredits,
       dronesDestroyed: this.dronesDestroyed,
+      doubleJumps: this.player.doubleJumpsUsed,
+      fastFalls: this.player.fastFallsUsed,
+      overdrivesTriggered: this.player.overdrivesTriggered,
     });
   };
 
@@ -592,6 +629,9 @@ export class MainGame extends Phaser.Scene {
       speedMultiplier: this.getSpeedMultiplier(),
       sectorNumber: this.currentSectorIndex + 1,
       sectorName: sector.name,
+      doubleJumps: this.player?.doubleJumpsUsed ?? 0,
+      fastFalls: this.player?.fastFallsUsed ?? 0,
+      overdrivesTriggered: this.player?.overdrivesTriggered ?? 0,
     });
   }
 

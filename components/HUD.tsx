@@ -1,6 +1,11 @@
 import React from 'react';
-import { Flame, Magnet, Pause, Shield, Volume2, VolumeX } from 'lucide-react';
+import { Award, Flame, Magnet, Pause, Shield, Volume2, VolumeX } from 'lucide-react';
 import { ActiveBuffs } from '../types';
+
+export interface MissionToastData {
+  label: string;
+  reward: number;
+}
 
 interface HUDProps {
   score: number;
@@ -9,6 +14,7 @@ interface HUDProps {
   sectorNumber: number;
   sectorName: string;
   buffs: ActiveBuffs;
+  missionToast: MissionToastData | null;
   muted: boolean;
   onToggleMute: () => void;
   onPause: () => void;
@@ -21,6 +27,7 @@ const HUD: React.FC<HUDProps> = ({
   sectorNumber,
   sectorName,
   buffs,
+  missionToast,
   muted,
   onToggleMute,
   onPause,
@@ -146,6 +153,19 @@ const HUD: React.FC<HUDProps> = ({
           </div>
         )}
       </div>
+
+      {missionToast && (
+        <div className="mt-1 inline-flex w-fit items-center gap-2 rounded-md border border-emerald-400/45 bg-[#0d1021]/92 px-3 py-1.5 text-xs shadow-lg backdrop-blur-md">
+          <Award className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          <span className="font-semibold text-white">Mission Complete</span>
+          <span aria-hidden="true" className="text-slate-500">·</span>
+          <span className="text-slate-300">{missionToast.label}</span>
+          <span aria-hidden="true" className="text-slate-500">·</span>
+          <span className="font-mono-num font-bold text-emerald-400">
+            +{missionToast.reward} Credits
+          </span>
+        </div>
+      )}
     </div>
   );
 };

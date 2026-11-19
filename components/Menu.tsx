@@ -1,6 +1,6 @@
 import React from 'react';
-import { RefreshCw, RotateCw, Smartphone, Volume2, VolumeX, Wrench, X } from 'lucide-react';
-import { OrientationMode } from '../types';
+import { Check, RefreshCw, RotateCw, Smartphone, Volume2, VolumeX, Wrench, X } from 'lucide-react';
+import { ActiveMission, OrientationMode } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface MenuProps {
@@ -12,6 +12,7 @@ interface MenuProps {
   hasUpdate: boolean;
   isUpdatingApp: boolean;
   canAffordUpgrade: boolean;
+  missions: ActiveMission[];
   onStart: () => void;
   onOpenUpgrades: () => void;
   onToggleMute: () => void;
@@ -29,6 +30,7 @@ const Menu: React.FC<MenuProps> = ({
   hasUpdate,
   isUpdatingApp,
   canAffordUpgrade,
+  missions,
   onStart,
   onOpenUpgrades,
   onToggleMute,
@@ -39,7 +41,7 @@ const Menu: React.FC<MenuProps> = ({
   const isLandscapeLocked = orientationMode === 'landscape';
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col items-center justify-between overflow-y-auto bg-[#06070d]/72 px-4 py-4 backdrop-blur-[2px] sm:p-6 [@media(max-height:500px)]:py-2.5">
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-between overflow-y-auto bg-[#06070d]/72 px-4 py-4 backdrop-blur-[2px] sm:p-6 [@media(max-height:500px)]:py-2">
       <div className="flex w-full max-w-3xl flex-wrap items-center justify-end gap-2">
         <PWAInstallButton />
 
@@ -67,14 +69,20 @@ const Menu: React.FC<MenuProps> = ({
           aria-label={muted ? 'Unmute audio' : 'Mute audio'}
           className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95 shrink-0 cursor-pointer"
         >
-          {muted ? <VolumeX className="h-5 w-5 text-rose-400" /> : <Volume2 className="h-5 w-5 text-cyan-400" />}
+          {muted ? (
+            <VolumeX className="h-5 w-5 text-rose-400" />
+          ) : (
+            <Volume2 className="h-5 w-5 text-cyan-400" />
+          )}
         </button>
       </div>
 
       {hasUpdate && (
         <div className="mt-2 flex w-full max-w-md items-center justify-between gap-3 rounded-lg border border-emerald-400/40 bg-[#0d1021]/95 px-3.5 py-2 text-xs text-slate-200 shadow-lg">
           <div className="flex items-center gap-2">
-            <RefreshCw className={`h-4 w-4 shrink-0 text-emerald-400 ${isUpdatingApp ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-4 w-4 shrink-0 text-emerald-400 ${isUpdatingApp ? 'animate-spin' : ''}`}
+            />
             <span>New version available.</span>
           </div>
           <button
@@ -105,7 +113,7 @@ const Menu: React.FC<MenuProps> = ({
         </div>
       )}
 
-      <div className="my-auto flex w-full max-w-md flex-col items-center py-2 text-center [@media(max-height:500px)]:max-w-xl [@media(max-height:500px)]:py-1">
+      <div className="my-auto flex w-full max-w-lg flex-col items-center py-2 text-center [@media(max-height:500px)]:max-w-2xl [@media(max-height:500px)]:py-1">
         <h1 className="font-display text-balance text-5xl font-bold italic tracking-tight text-white sm:text-6xl [@media(max-height:500px)]:text-4xl">
           Neon <span className="text-cyan-400">Runner</span>
         </h1>
@@ -113,7 +121,7 @@ const Menu: React.FC<MenuProps> = ({
           Cyber City Endless Sprint
         </p>
 
-        <div className="mt-5 flex items-center gap-4 text-sm text-slate-300 [@media(max-height:500px)]:mt-2.5 [@media(max-height:500px)]:text-xs">
+        <div className="mt-4 flex items-center gap-4 text-sm text-slate-300 [@media(max-height:500px)]:mt-2 [@media(max-height:500px)]:text-xs">
           <div>
             <span className="text-slate-400">Best </span>
             <span className="font-mono-num font-bold text-white">{highScore}m</span>
@@ -125,7 +133,7 @@ const Menu: React.FC<MenuProps> = ({
           </div>
         </div>
 
-        <div className="mt-7 flex w-full flex-col gap-3 sm:flex-row sm:justify-center [@media(max-height:500px)]:mt-3.5 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:justify-center">
+        <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:justify-center [@media(max-height:500px)]:mt-2.5 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:justify-center">
           <button
             type="button"
             onClick={onStart}
@@ -146,13 +154,56 @@ const Menu: React.FC<MenuProps> = ({
             )}
           </button>
         </div>
+
+        {missions.length > 0 && (
+          <div className="mt-5 w-full rounded-lg border border-white/10 bg-[#0d1021]/82 px-4 py-3 text-left [@media(max-height:500px)]:mt-2.5 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2">
+            <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-300 [@media(max-height:500px)]:mb-1.5">
+              <span>Active Missions</span>
+              <span className="text-slate-400">Bonus Credits</span>
+            </div>
+            <div className="grid gap-2 [@media(max-height:500px)]:grid-cols-3 [@media(max-height:500px)]:gap-3">
+              {missions.map((mission) => {
+                const pct = Math.min(100, Math.round((mission.progress / mission.target) * 100));
+                return (
+                  <div key={mission.id} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-slate-200">{mission.label}</span>
+                      <span className="font-mono-num shrink-0 text-emerald-400">
+                        {mission.completed ? (
+                          <Check className="inline h-3.5 w-3.5" />
+                        ) : (
+                          `+${mission.reward}`
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className={`h-full transition-[width] ${
+                            mission.completed ? 'bg-emerald-400' : 'bg-cyan-400'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="font-mono-num text-[11px] text-slate-400">
+                        {Math.floor(mission.progress)}/{mission.target}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="w-full max-w-md border-t border-white/10 pt-3 text-center text-xs text-slate-400 [@media(max-height:500px)]:pt-2">
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
-          <span>Tap or Space: Short Jump</span>
+      <div className="w-full max-w-xl border-t border-white/10 pt-2.5 text-center text-xs text-slate-400 [@media(max-height:500px)]:pt-1.5">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          <span>Tap / Space: Jump &amp; Double Jump</span>
           <span aria-hidden="true" className="text-slate-600">·</span>
-          <span>Hold: High Jump &amp; Glide</span>
+          <span>Hold: Glide</span>
+          <span aria-hidden="true" className="text-slate-600">·</span>
+          <span>Swipe Down / ↓: Fast-Fall</span>
         </div>
       </div>
     </div>

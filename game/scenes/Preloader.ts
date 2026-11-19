@@ -214,6 +214,30 @@ export class Preloader extends Phaser.Scene {
       ctx.fillRect(x, 15, 10, 3);
     }
     canvas.refresh();
+
+    if (!this.textures.exists('sky_platform')) {
+      const platCanvas = this.textures.createCanvas('sky_platform', 180, 22);
+      if (platCanvas) {
+        const pctx = platCanvas.context;
+        pctx.fillStyle = '#111630';
+        pctx.fillRect(4, 4, 172, 12);
+
+        // Top neon landing rail
+        pctx.fillStyle = '#00f3ff';
+        pctx.fillRect(0, 0, 180, 4);
+        pctx.fillStyle = 'rgba(0, 243, 255, 0.35)';
+        pctx.fillRect(4, 4, 172, 3);
+
+        // Underside hover thruster emitters
+        pctx.fillStyle = '#ff2a6d';
+        pctx.fillRect(22, 16, 26, 4);
+        pctx.fillRect(132, 16, 26, 4);
+        pctx.fillStyle = '#ffc857';
+        pctx.fillRect(80, 16, 20, 3);
+
+        platCanvas.refresh();
+      }
+    }
   }
 
   private drawRunnerBase(ctx: CanvasRenderingContext2D, opts: {

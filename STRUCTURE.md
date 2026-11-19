@@ -68,8 +68,8 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 | `index.tsx` | Punto di ingresso JavaScript che importa `index.css` e monta il componente `<App />` nell'elemento `#root`. |
 | `index.css` | Importa Tailwind CSS v4 (`@import "tailwindcss";`), blocca lo scroll/selezione touch sul canvas e definisce le utility tipografiche `.font-display` e `.font-mono-num` (cifre tabellari). |
 | `App.tsx` | Orchestratore React dell'interfaccia: gestisce la macchina a stati (`MENU`, `PLAYING`, `PAUSED`, `GAME_OVER`), ascolta gli eventi provenienti da Phaser (`PHASER_EVENT`), aggiorna record/crediti/upgrade in `localStorage` e invia comandi a Phaser (`PHASER_START`, `PHASER_PAUSE`, `PHASER_RESUME`, `PHASER_RESTART`, `PHASER_MENU`, `PHASER_SYNC_PROGRESS`). |
-| `constants.ts` | Contiene tutti i parametri fisici tarati (gravità, salto, *coyote time*, *jump buffer*, planata, Overdrive), le palette dei settori (`SECTORS_PALETTE`), il catalogo skin (`SKINS_CATALOG`) e i potenziamenti `UPGRADES_CATALOG`. |
-| `types.ts` | Definisce gli enum e le interfacce TypeScript condivise tra UI e motore di gioco (`GameState`, `SkinId`, `UpgradeId`, `PlayerProgress`, `ActiveBuffs`, `RunTelemetry`). |
+| `constants.ts` | Contiene tutti i parametri fisici tarati (gravità, salto, doppio salto, fast-fall, *coyote time*, *jump buffer*, planata, Overdrive), le palette dei settori (`SECTORS_PALETTE`), il catalogo skin (`SKINS_CATALOG`), i potenziamenti (`UPGRADES_CATALOG`) e i template delle missioni (`createMissionFromSeed`). |
+| `types.ts` | Definisce gli enum e le interfacce TypeScript condivise tra UI e motore di gioco (`GameState`, `SkinId`, `UpgradeId`, `MissionType`, `ActiveMission`, `PlayerProgress`, `ActiveBuffs`, `RunTelemetry`). |
 | `vite.config.ts` | Configura Vite con `@vitejs/plugin-react`, `@tailwindcss/vite` e `vite-plugin-pwa`. Legge `VITE_BASE_PATH` per adattare automaticamente `base`, manifest PWA (`start_url`, `scope`, `id`, icone) e Workbox sia in root (`/`) che su sottopath GitHub Pages (`/<repo>/`). |
 | `package.json` | Elenco dipendenze (`phaser`, `react`, `react-dom`, `lucide-react`, `tailwindcss`, `@tailwindcss/vite`, `vite-plugin-pwa`) e script `dev`, `build`, `preview`, `lint`. |
 | `tsconfig.json` | Configurazione TypeScript (`ES2022`, `bundler`, tipi `vite/client` e `vite-plugin-pwa/client`). |
@@ -82,11 +82,11 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 
 | File | Cosa fa |
 | :--- | :--- |
-| `game/PhaserGame.tsx` | Componente React che inizializza un'unica istanza `Phaser.Game` in modalità `Phaser.Scale.RESIZE`, collega il bridge `PHASER_EVENT` verso React e distrugge l'istanza allo smontaggio. |
-| `game/scenes/Preloader.ts` | Genera in memoria tramite Canvas 2D tutte le texture del gioco (cielo, città, pavimento, runner, barriere, drone, missili e segnale di pericolo sul bordo, monete, icona Shield/Magnet, proiettili e particelle tintabili) e registra le animazioni (`anim_player_run`, `anim_drone`, `anim_missile`, `anim_coin`). |
-| `game/scenes/MainGame.ts` | Cuore della partita: gestisce parallasse, transizioni cromatiche dei settori ogni 300m, collisioni (incluse collisioni distruttive in **Hyper Overdrive**), pausa, resize mobile/desktop ed eventi verso React. |
-| `game/entities/Player.ts` | Gestisce il runner: salto variabile, *coyote time*, *jump buffer*, planata, blaster, skin cromatiche applicate a corpo/scia/proiettili, barra **Hyper Overdrive** (invincibilità + velocità extra) e timer Shield/Magnet. |
-| `game/entities/ObstacleManager.ts` | Gestisce il pool di barriere fisse, Cyber Drones oscillanti, missili con telegrafo sul bordo destro (inseguimento + aggancio lampeggiante + lancio), crediti e power-up con attrazione magnetica. |
+| `game/PhaserGame.tsx` | Componente React che inizializza in sicurezza un'unica istanza `Phaser.Game` in modalità `Phaser.Scale.RESIZE`, con test preventivo del framebuffer WebGL e fallback automatico a Canvas. |
+| `game/scenes/Preloader.ts` | Genera in memoria tramite Canvas 2D tutte le texture del gioco (cielo, città, pavimento, passerelle aeree `sky_platform`, runner, barriere, drone, missili e segnale di pericolo, monete, icona Shield/Magnet, proiettili e particelle tintabili) e registra le animazioni (`anim_player_run`, `anim_drone`, `anim_missile`, `anim_coin`). |
+| `game/scenes/MainGame.ts` | Cuore della partita: gestisce parallasse, collider one-way per piattaforme aeree, input swipe-down / `↓` / `S` per Fast-Fall, transizioni cromatiche dei settori ogni 300m, collisioni (incluse collisioni distruttive in **Hyper Overdrive**), pausa, resize mobile/desktop ed eventi verso React. |
+| `game/entities/Player.ts` | Gestisce il runner: salto variabile, doppio salto a mezz'aria, picchiata rapida (Fast-Fall), *coyote time*, *jump buffer*, planata, blaster, skin cromatiche applicate a corpo/scia/proiettili, barra **Hyper Overdrive** e timer Shield/Magnet. |
+| `game/entities/ObstacleManager.ts` | Gestisce il pool di barriere fisse, piattaforme aeree one-way, Cyber Drones oscillanti, missili con telegrafo sul bordo destro, crediti e power-up con attrazione magnetica. |
 
 ---
 
@@ -94,10 +94,10 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 
 | File | Cosa fa |
 | :--- | :--- |
-| `components/Menu.tsx` | Schermata iniziale sopra il fondale animato in parallasse: mostra titolo, miglior distanza, crediti totali, pulsanti **Start Run**, **Upgrades**, toggle orientamento (**Auto** / **Landscape** con avviso iOS), banner aggiornamenti SW, toggle audio e **Install App**. |
-| `components/HUD.tsx` | Barra superiore non invasiva in partita: mostra distanza in metri, velocità, settore corrente (`S1 · Cyber Cyan`), crediti della corsa, barra di carica/countdown **Hyper Overdrive**, barre **Shield**/**Magnet**, **Mute** e **Pause**. |
+| `components/Menu.tsx` | Schermata iniziale sopra il fondale animato in parallasse: mostra titolo, miglior distanza, crediti totali, riepilogo delle **3 missioni attive**, pulsanti **Start Run**, **Upgrades**, toggle orientamento (**Auto** / **Landscape** con avviso iOS), banner aggiornamenti SW, toggle audio e **Install App**. |
+| `components/HUD.tsx` | Barra superiore non invasiva in partita: mostra distanza in metri, velocità, settore corrente (`S1 · Cyber Cyan`), crediti della corsa, barra di carica/countdown **Hyper Overdrive**, barre **Shield**/**Magnet**, toast di **Mission Complete**, **Mute** e **Pause**. |
 | `components/PauseModal.tsx` | Finestra modale mostrata in pausa con riepilogo corsa e azioni **Resume**, **Sound: On/Off**, **Restart** e **Main Menu** (compatta anche in landscape). |
-| `components/GameOver.tsx` | Schermata di fine corsa con distanza raggiunta, crediti guadagnati, droni distrutti, indicatore **New Personal Best**, accesso diretto a **Upgrades**, **Main Menu** e **Play Again**. |
+| `components/GameOver.tsx` | Schermata di fine corsa con distanza raggiunta, crediti guadagnati, droni distrutti, avanzamento delle **3 missioni attive**, indicatore **New Personal Best**, accesso diretto a **Upgrades**, **Main Menu** e **Play Again**. |
 | `components/UpgradesModal.tsx` | Officina a due schede (**Upgrades** e **Skins**): permette di potenziare i 4 moduli (`0..5`) e di sbloccare/equipaggiare le 5 skin cromatiche con i crediti salvati. |
 | `components/PWAInstallButton.tsx` | Pulsante intelligente per l'installazione PWA: mostra il prompt nativo su Android/Desktop oppure apre una guida visiva dedicata per Safari su iPhone/iPad, nascondendosi automaticamente se l'app è già avviata in modalità `standalone`. |
 
@@ -107,8 +107,8 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 
 | File | Cosa fa |
 | :--- | :--- |
-| `utils/sound.ts` | Classe `SoundEngine` basata su Web Audio API: sintetizza gli effetti sonori senza file audio esterni (inclusi avviso/lancio missile, overdrive smash e cambio settore) e gestisce `muted`. |
-| `utils/storage.ts` | Gestisce caricamento, validazione e salvataggio in `localStorage` (`neon_runner_progress_v2`) per `highScore`, `totalCredits`, `muted`, `orientationMode`, `unlockedSkins`, `equippedSkin` e `upgrades`. |
+| `utils/sound.ts` | Classe `SoundEngine` basata su Web Audio API: sintetizza gli effetti sonori senza file audio esterni (inclusi doppio salto, fast-fall, atterraggio, completamento missione, missile e overdrive) e gestisce `muted`. |
+| `utils/storage.ts` | Gestisce caricamento, validazione, rotazione e salvataggio in `localStorage` (`neon_runner_progress_v2`) per `highScore`, `totalCredits`, `muted`, `orientationMode`, `unlockedSkins`, `equippedSkin`, `missions` e `upgrades`. |
 | `hooks/useOrientation.ts` | Hook React che gestisce la modalità **Auto** / **Landscape** usando Fullscreen API e `screen.orientation.lock('landscape')` su Android/PWA, e mostra un avviso auto-chiudibile su iOS Safari quando è richiesta la rotazione manuale. |
 | `hooks/usePWAInstall.ts` | Hook React che rileva se l'app è già installata (`display-mode: standalone`), riconosce iOS Safari e cattura l'evento `beforeinstallprompt` per attivare l'installazione con un tap. |
 | `hooks/usePWAUpdate.ts` | Hook React basato su `virtual:pwa-register`: forza il controllo del nuovo Service Worker al rientro sull'app (`visibilitychange`, `focus`, `online`) e applica `skipWaiting` + reload quando l'utente preme **Update Now** nel Menu. |

@@ -15,6 +15,7 @@ export class ObstacleManager {
   public barriers: Phaser.Physics.Arcade.Group;
   public drones: Phaser.Physics.Arcade.Group;
   public missiles: Phaser.Physics.Arcade.Group;
+  public platforms: Phaser.Physics.Arcade.Group;
   public coins: Phaser.Physics.Arcade.Group;
   public powerups: Phaser.Physics.Arcade.Group;
 
@@ -42,9 +43,14 @@ export class ObstacleManager {
       maxSize: 6,
     });
 
+    this.platforms = scene.physics.add.group({
+      defaultKey: 'sky_platform',
+      maxSize: 6,
+    });
+
     this.coins = scene.physics.add.group({
       defaultKey: 'coin_0',
-      maxSize: 32,
+      maxSize: 36,
     });
 
     this.powerups = scene.physics.add.group({
@@ -75,7 +81,11 @@ export class ObstacleManager {
     }
 
     // Trigger Jetpack Joyride-style missile warning periodically after 80m
-    if (scoreMeters >= 80 && this.distanceSinceMissile >= this.nextMissileDistance && this.warnings.length === 0) {
+    if (
+      scoreMeters >= 80 &&
+      this.distanceSinceMissile >= this.nextMissileDistance &&
+      this.warnings.length === 0
+    ) {
       this.distanceSinceMissile = 0;
       this.nextMissileDistance = Phaser.Math.Between(1600, 2600);
       this.triggerMissileWarning(player);
@@ -83,15 +93,16 @@ export class ObstacleManager {
 
     this.updateMissileWarnings(delta, speed, player);
 
-    // Move barriers
-    this.updateGroupMovement(this.barriers, speed);
+    // Move barriers and sky platforms
+    this.updateGroupMovement(this.barriers, speed, -120);
+    this.updateGroupMovement(this.platforms, speed, -180);
 
-    // Move missiles faster than scroll speed
+    // Move missiles at configured 1.2x scroll speed
     const missileChildren = this.missiles.getChildren();
     for (let i = 0; i < missileChildren.length; i++) {
       const m = missileChildren[i] as Phaser.Physics.Arcade.Sprite;
       if (m && m.active) {
-        m.setVelocityX(-speed * 1.68);
+        m.setVelocityX(-speed * GAME_CONFIG.MISSILE_SPEED_MULTIPLIER);
         if (m.x < -120) {
           m.disableBody(true, true);
         }
@@ -114,7 +125,9 @@ export class ObstacleManager {
     }
 
     // Move coins + Magnet attraction
-    const magnetActive = Boolean(player && (player.magnetRemaining > 0 || player.overdriveActive) && !player.isDead);
+    const magnetActive = Boolean(
+      player && (player.magnetRemaining > 0 || player.overdriveActive) && !player.isDead
+    );
     const magnetRadius = player
       ? player.overdriveActive
         ? Math.max(240, player.getMagnetRadius())
@@ -232,19 +245,23 @@ export class ObstacleManager {
         body.immovable = true;
         body.setSize(42, 16);
         body.setOffset(4, 4);
-        missile.setVelocityX(-speed * 1.68);
+        missile.setVelocityX(-speed * GAME_CONFIG.MISSILE_SPEED_MULTIPLIER);
       }
       soundEngine.playMissileLaunch();
     }
   }
 
-  private updateGroupMovement(group: Phaser.Physics.Arcade.Group, speed: number) {
+  private updateGroupMovement(
+    group: Phaser.Physics.Arcade.Group,
+    speed: number,
+    despawnX: number
+  ) {
     const children = group.getChildren();
     for (let i = 0; i < children.length; i++) {
       const obj = children[i] as Phaser.Physics.Arcade.Sprite;
       if (obj && obj.active) {
         obj.setVelocityX(-speed);
-        if (obj.x < -120) {
+        if (obj.x < despawnX) {
           obj.disableBody(true, true);
         }
       }
@@ -267,23 +284,41 @@ export class ObstacleManager {
       const type = Phaser.Math.Between(0, 1) === 0 ? 'shield' : 'magnet';
       const powerupY = clampY(groundTop - Math.min(125, usableHeight * 0.62));
       this.spawnPowerup(startX + 40, powerupY, type, speed);
-      this.spawnCoinArc(startX + 120, clampY(groundTop - Math.min(82, usableHeight * 0.42)), 3, speed, safeTopY);
+      this.spawnCoinArc(
+        startX + 120,
+        clampY(groundTop - Math.min(82, usableHeight * 0.42)),
+        3,
+        speed,
+        safeTopY
+      );
       return 220;
     }
 
     const roll = Phaser.Math.Between(0, 99);
 
-    if (roll < 28) {
+    if (roll < 22) {
       // Pattern 1: Single low barrier + rewarding coin arc overhead
       this.spawnBarrier(startX, groundTop, false, speed);
-      this.spawnCoinArc(startX - 45, clampY(groundTop - Math.min(92, usableHeight * 0.48)), 3, speed, safeTopY);
+      this.spawnCoinArc(
+        startX - 45,
+        clampY(groundTop - Math.min(92, usableHeight * 0.48)),
+        3,
+        speed,
+        safeTopY
+      );
       return 120;
-    } else if (roll < 52) {
-      // Pattern 2: Tall barrier (encourages holding jump) + glide coin trail
+    } else if (roll < 42) {
+      // Pattern 2: Tall barrier (encourages holding jump or double jump) + glide coin trail
       this.spawnBarrier(startX, groundTop, true, speed);
-      this.spawnCoinArc(startX + 55, clampY(groundTop - Math.min(138, usableHeight * 0.68)), 4, speed, safeTopY);
+      this.spawnCoinArc(
+        startX + 55,
+        clampY(groundTop - Math.min(138, usableHeight * 0.68)),
+        4,
+        speed,
+        safeTopY
+      );
       return 190;
-    } else if (roll < 76) {
+    } else if (roll < 64) {
       // Pattern 3: Destructible Cyber Drone(s) + coins behind
       const droneCount = speed > 560 ? 2 : 1;
       const minDroneY = safeTopY + 14;
@@ -294,7 +329,7 @@ export class ObstacleManager {
       }
       this.spawnCoinLine(startX + 30, clampY(groundTop - 44), 3, speed);
       return droneCount === 2 ? 220 : 120;
-    } else if (roll < 90) {
+    } else if (roll < 78) {
       // Pattern 4: Low barrier followed by hovering drone
       this.spawnBarrier(startX, groundTop, false, speed);
       const spacing = Math.max(250, speed * 0.52);
@@ -302,10 +337,42 @@ export class ObstacleManager {
       this.spawnDrone(startX + spacing, droneY, speed);
       this.spawnCoinArc(startX + spacing * 0.45, droneY, 3, speed, safeTopY);
       return spacing + 80;
+    } else if (roll < 94) {
+      // Pattern 5: Elevated One-Way Sky Platform with bonus coins on top
+      const platLift = Math.min(134, Math.max(94, usableHeight * 0.54));
+      const platformY = clampY(groundTop - platLift);
+      const platCenterX = startX + 80;
+      this.spawnPlatform(platCenterX, platformY, speed);
+      this.spawnCoinLine(platCenterX - 64, Math.max(safeTopY, platformY - 30), 4, speed);
+
+      // Half of the time, place a low ground barrier underneath so jumping up is tactical
+      if (Phaser.Math.Between(0, 1) === 1) {
+        this.spawnBarrier(platCenterX, groundTop, false, speed);
+      }
+      return 230;
     } else {
-      // Pattern 5: Safe coin streak
+      // Pattern 6: Safe coin streak
       this.spawnCoinLine(startX, clampY(groundTop - 48), 5, speed);
       return 180;
+    }
+  }
+
+  private spawnPlatform(x: number, y: number, speed: number) {
+    const platform = this.platforms.get(x, y, 'sky_platform') as Phaser.Physics.Arcade.Sprite | null;
+    if (platform) {
+      platform.enableBody(true, x, y, true, true);
+      if (platform.body) {
+        const body = platform.body as Phaser.Physics.Arcade.Body;
+        body.setAllowGravity(false);
+        body.immovable = true;
+        body.checkCollision.up = true;
+        body.checkCollision.down = false;
+        body.checkCollision.left = false;
+        body.checkCollision.right = false;
+        body.setSize(176, 16);
+        body.setOffset(2, 0);
+        platform.setVelocityX(-speed);
+      }
     }
   }
 
@@ -412,6 +479,7 @@ export class ObstacleManager {
     deactivateAll(this.barriers);
     deactivateAll(this.drones);
     deactivateAll(this.missiles);
+    deactivateAll(this.platforms);
     deactivateAll(this.coins);
     deactivateAll(this.powerups);
 

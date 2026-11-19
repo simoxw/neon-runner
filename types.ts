@@ -15,6 +15,24 @@ export type UpgradeId =
   | 'blasterRate'
   | 'creditMultiplier';
 
+export type MissionType =
+  | 'distance'
+  | 'drones'
+  | 'credits'
+  | 'doubleJumps'
+  | 'fastFalls'
+  | 'overdrive';
+
+export interface ActiveMission {
+  id: string;
+  type: MissionType;
+  label: string;
+  target: number;
+  progress: number;
+  reward: number;
+  completed: boolean;
+}
+
 export interface PlayerProgress {
   highScore: number;
   totalCredits: number;
@@ -23,6 +41,8 @@ export interface PlayerProgress {
   unlockedSkins: SkinId[];
   equippedSkin: SkinId;
   upgrades: Record<UpgradeId, number>;
+  missions: ActiveMission[];
+  missionSeed: number;
 }
 
 export interface ActiveBuffs {
@@ -43,4 +63,7 @@ export interface RunTelemetry {
   speedMultiplier: number;
   sectorNumber: number;
   sectorName: string;
+  doubleJumps: number;
+  fastFalls: number;
+  overdrivesTriggered: number;
 }
