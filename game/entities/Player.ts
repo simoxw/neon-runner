@@ -559,6 +559,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const bullet = this.bullets.get(bx, by, 'bullet') as Phaser.Physics.Arcade.Sprite | null;
     if (bullet) {
       bullet.enableBody(true, bx, by, true, true);
+      bullet.setDepth(8);
       bullet.setTint(tint);
       if (bullet.body) {
         const body = bullet.body as Phaser.Physics.Arcade.Body;

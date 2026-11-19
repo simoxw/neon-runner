@@ -16,19 +16,19 @@ export const GAME_CONFIG = {
   JUMP_BUFFER_MS: 110,
   GLIDE_MAX_FALL_SPEED: 135,
   BASE_SPEED: 420,
-  MAX_SPEED: 940,
-  SPEED_INCREMENT: 24,
-  DIFFICULTY_INTERVAL_METERS: 120,
+  MAX_SPEED: 860,
+  SPEED_INCREMENT: 20,
+  DIFFICULTY_INTERVAL_METERS: 220,
   GROUND_HEIGHT: 96,
   GROUND_HEIGHT_COMPACT: 72,
   POOL_SIZE: 16,
   POWERUP_INTERVAL_METERS: 180,
   OVERDRIVE_DURATION_MS: 5500,
   OVERDRIVE_SPEED_BONUS: 240,
-  OVERDRIVE_CHARGE_PER_COIN: 2,
-  OVERDRIVE_CHARGE_PER_DRONE: 6,
-  OVERDRIVE_CHARGE_PER_ARMORED_DRONE: 10,
-  OVERDRIVE_CHARGE_PER_RING: 8,
+  OVERDRIVE_CHARGE_PER_COIN: 1,
+  OVERDRIVE_CHARGE_PER_DRONE: 3,
+  OVERDRIVE_CHARGE_PER_ARMORED_DRONE: 5,
+  OVERDRIVE_CHARGE_PER_RING: 4,
   MISSILE_SPEED_MULTIPLIER: 1.2,
   SECTOR_INTERVAL_METERS: 300,
   LASER_WARN_MS: 950,
@@ -162,40 +162,45 @@ const MISSION_TEMPLATES: MissionTemplate[] = [
     type: 'distance',
     targets: [600, 1000, 1600, 2400],
     rewards: [30, 40, 55, 70],
-    formatLabel: (target) => `Sprint ${target}m total`,
+    formatLabel: (target) => `Corri per ${target}m totali`,
   },
   {
     type: 'drones',
     targets: [8, 14, 22, 30],
     rewards: [30, 45, 60, 75],
-    formatLabel: (target) => `Destroy ${target} Cyber Drones`,
+    formatLabel: (target) => `Distruggi ${target} Droni Cyber`,
   },
   {
     type: 'credits',
     targets: [50, 85, 130, 180],
     rewards: [25, 35, 50, 65],
-    formatLabel: (target) => `Collect ${target} Credits`,
+    formatLabel: (target) => `Raccogli ${target} Crediti`,
   },
   {
     type: 'doubleJumps',
     targets: [10, 18, 28, 40],
     rewards: [25, 35, 45, 60],
-    formatLabel: (target) => `Perform ${target} Double Jumps`,
+    formatLabel: (target) => `Esegui ${target} Doppi Salti`,
   },
   {
     type: 'platforms',
     targets: [6, 12, 20, 30],
     rewards: [25, 35, 50, 65],
-    formatLabel: (target) => `Land on ${target} Sky Platforms`,
+    formatLabel: (target) => `Atterra su ${target} Piattaforme Aeree`,
   },
   {
     type: 'overdrive',
     targets: [1, 2, 3, 4],
     rewards: [35, 55, 75, 95],
     formatLabel: (target) =>
-      target === 1 ? 'Trigger Hyper Overdrive once' : `Trigger Hyper Overdrive ${target} times`,
+      target === 1 ? 'Attiva Hyper Overdrive 1 volta' : `Attiva Hyper Overdrive ${target} volte`,
   },
 ];
+
+export function formatMissionLabel(type: MissionType, target: number): string {
+  const template = MISSION_TEMPLATES.find((t) => t.type === type);
+  return template ? template.formatLabel(target) : `${target}`;
+}
 
 export function createMissionFromSeed(
   seed: number,
@@ -233,8 +238,8 @@ export interface UpgradeConfig {
 export const UPGRADES_CATALOG: UpgradeConfig[] = [
   {
     id: 'shieldDuration',
-    name: 'Energy Shield',
-    description: 'Extends active barrier absorption time.',
+    name: 'Scudo Energetico',
+    description: 'Prolunga la durata della barriera protettiva attiva.',
     maxLevel: 5,
     baseCost: 25,
     costStep: 25,
@@ -243,8 +248,8 @@ export const UPGRADES_CATALOG: UpgradeConfig[] = [
   },
   {
     id: 'magnetDuration',
-    name: 'Credit Magnet',
-    description: 'Increases attraction duration and pull radius.',
+    name: 'Magnete Crediti',
+    description: 'Aumenta durata e raggio di attrazione dei crediti.',
     maxLevel: 5,
     baseCost: 25,
     costStep: 25,
@@ -254,20 +259,20 @@ export const UPGRADES_CATALOG: UpgradeConfig[] = [
   {
     id: 'blasterRate',
     name: 'Pulse Blaster',
-    description: 'Faster fire rate; unlocks Dual Pulse at Lv 3+.',
+    description: 'Aumenta la cadenza di fuoco; sblocca Doppio Raggio al Lv 3+.',
     maxLevel: 5,
     baseCost: 30,
     costStep: 30,
     unit: 'ms',
     formatValue: (lvl: number) =>
       lvl >= GAME_CONFIG.DUAL_PULSE_MIN_LEVEL
-        ? `${getBlasterCooldownMs(lvl)}ms · Dual`
+        ? `${getBlasterCooldownMs(lvl)}ms · Doppio`
         : `${getBlasterCooldownMs(lvl)}ms`,
   },
   {
     id: 'jetpackThruster',
-    name: 'Jetpack Thruster',
-    description: 'Expands mid-air fuel tank and boost climb speed.',
+    name: 'Propulsore Jetpack',
+    description: 'Aumenta la capacità del serbatoio e la spinta in volo.',
     maxLevel: 5,
     baseCost: 30,
     costStep: 30,
@@ -277,8 +282,8 @@ export const UPGRADES_CATALOG: UpgradeConfig[] = [
   },
   {
     id: 'creditMultiplier',
-    name: 'Credit Boost',
-    description: 'Bonus multiplier on collected and drone credits.',
+    name: 'Moltiplicatore Crediti',
+    description: 'Bonus sui crediti raccolti e sui droni abbattuti.',
     maxLevel: 5,
     baseCost: 40,
     costStep: 35,

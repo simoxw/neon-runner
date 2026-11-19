@@ -120,3 +120,44 @@ export function computeSpeedForScore(scoreMeters: number): number {
 export function computeRefilledFuel(currentFuelMs: number, maxFuelMs: number): number {
   return Math.max(0, Math.min(maxFuelMs, Math.max(currentFuelMs, maxFuelMs)));
 }
+
+export interface RoadGapSpan {
+  leftX: number;
+  rightX: number;
+}
+
+export function isOverRoadGap(
+  playerX: number,
+  gaps: RoadGapSpan[],
+  edgeGracePx: number = 10
+): boolean {
+  for (let i = 0; i < gaps.length; i++) {
+    const gap = gaps[i];
+    if (playerX >= gap.leftX + edgeGracePx && playerX <= gap.rightX - edgeGracePx) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function shouldCollideWithGround(
+  playerX: number,
+  playerY: number,
+  groundTop: number,
+  gaps: RoadGapSpan[],
+  overdriveActive: boolean
+): boolean {
+  if (playerY > groundTop - 16) {
+    return false;
+  }
+  if (overdriveActive) {
+    return true;
+  }
+  return !isOverRoadGap(playerX, gaps);
+}
+
+export function getMaxSingleJumpDistancePx(speedPxPerSec: number): number {
+  const airTimeSec = (2 * Math.abs(GAME_CONFIG.PLAYER_JUMP_INITIAL)) / GAME_CONFIG.GRAVITY;
+  return speedPxPerSec * airTimeSec;
+}
+

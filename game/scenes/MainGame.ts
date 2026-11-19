@@ -15,6 +15,7 @@ import {
   computeSpeedForScore,
   resetCombo,
   resolveDroneBulletHit,
+  shouldCollideWithGround,
   stepRunDistance,
   tickComboDecay,
 } from '../../utils/gameRules';
@@ -32,6 +33,17 @@ export class MainGame extends Phaser.Scene {
   public cityNear: Phaser.GameObjects.TileSprite | null = null;
   public ground: Phaser.GameObjects.TileSprite | null = null;
   public groundBody: Phaser.GameObjects.Rectangle | null = null;
+
+  private sectorSun: Phaser.GameObjects.Image | null = null;
+  private searchlights: Phaser.GameObjects.Image[] = [];
+  private hoverTraffic: Array<{
+    sprite: Phaser.GameObjects.Image;
+    speedX: number;
+    baseYRatio: number;
+    phase: number;
+    baseAlpha: number;
+    extraSectorOnly: boolean;
+  }> = [];
 
   private explosionEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
@@ -65,14 +77,80 @@ export class MainGame extends Phaser.Scene {
     const { width, height } = this.scale;
     const gh = getGroundHeight(height);
 
-    this.sky = this.add.tileSprite(0, 0, width, height, 'sky').setOrigin(0, 0).setScrollFactor(0);
-    this.cityFar = this.add.tileSprite(0, height - gh - 340, width, 420, 'city_far').setOrigin(0, 0).setScrollFactor(0);
-    this.cityNear = this.add.tileSprite(0, height - gh - 260, width, 340, 'city_near').setOrigin(0, 0).setScrollFactor(0);
-    this.ground = this.add.tileSprite(0, height - gh, width, gh, 'ground').setOrigin(0, 0).setScrollFactor(0);
+    this.sky = this.add.tileSprite(0, 0, width, height, 'sky').setOrigin(0, 0).setScrollFactor(0).setDepth(0);
+
+    if (this.textures.exists('sector_sun')) {
+      this.sectorSun = this.add
+        .image(width * 0.72, Math.max(92, height - gh - 185), 'sector_sun')
+        .setScrollFactor(0)
+        .setDepth(0.25)
+        .setAlpha(0);
+    }
+
+    this.cityFar = this.add
+      .tileSprite(0, height - gh - 340, width, 420, 'city_far')
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(0.5);
+
+    this.hoverTraffic = [];
+    if (this.textures.exists('hover_car_0') && this.textures.exists('hover_car_1')) {
+      const carDefs = [
+        { key: 'hover_car_0', speedX: -125, baseYRatio: 0.24, scale: 0.85, alpha: 0.65, extra: false },
+        { key: 'hover_car_1', speedX: 92, baseYRatio: 0.34, scale: 0.72, alpha: 0.52, extra: false },
+        { key: 'hover_car_0', speedX: -152, baseYRatio: 0.44, scale: 0.95, alpha: 0.72, extra: false },
+        { key: 'hover_car_1', speedX: 118, baseYRatio: 0.54, scale: 0.8, alpha: 0.58, extra: false },
+        { key: 'hover_car_0', speedX: -175, baseYRatio: 0.3, scale: 1.0, alpha: 0.75, extra: true },
+        { key: 'hover_car_1', speedX: 140, baseYRatio: 0.48, scale: 0.88, alpha: 0.65, extra: true },
+      ];
+      const skySpan = Math.max(120, height - gh - 45);
+      carDefs.forEach((def, idx) => {
+        const sprite = this.add
+          .image(Phaser.Math.Between(0, Math.max(320, width)), 45 + skySpan * def.baseYRatio, def.key)
+          .setScrollFactor(0)
+          .setDepth(0.8)
+          .setScale(def.scale)
+          .setAlpha(def.extra ? 0 : def.alpha);
+        this.hoverTraffic.push({
+          sprite,
+          speedX: def.speedX,
+          baseYRatio: def.baseYRatio,
+          phase: idx * 1.3,
+          baseAlpha: def.alpha,
+          extraSectorOnly: def.extra,
+        });
+      });
+    }
+
+    this.searchlights = [];
+    if (this.textures.exists('searchlight_beam')) {
+      [width * 0.28, width * 0.74].forEach((bx) => {
+        const beam = this.add
+          .image(bx, height - gh + 10, 'searchlight_beam')
+          .setOrigin(0.5, 1)
+          .setScrollFactor(0)
+          .setDepth(0.9)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setAlpha(0);
+        this.searchlights.push(beam);
+      });
+    }
+
+    this.cityNear = this.add
+      .tileSprite(0, height - gh - 260, width, 340, 'city_near')
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(1.2);
+    this.ground = this.add
+      .tileSprite(0, height - gh, width, gh, 'ground')
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(2.5);
 
     this.groundBody = this.add.rectangle(width / 2, height - gh / 2, width, gh, 0x000000, 0);
     this.physics.add.existing(this.groundBody, true);
     this.physics.world.setBounds(0, 0, width, height);
+    this.physics.world.setBoundsCollision(true, true, true, false);
 
     const playerStartX = Math.min(130, Math.max(76, width * 0.16));
     const playerStartY = height - gh - 36;
@@ -86,9 +164,15 @@ export class MainGame extends Phaser.Scene {
       () => this.emitRunUpdate()
     );
     this.applyProgressToPlayer();
-    this.physics.add.collider(this.player, this.groundBody);
 
     this.obstacleManager = new ObstacleManager(this);
+    this.physics.add.collider(
+      this.player,
+      this.groundBody,
+      undefined,
+      this.shouldCollideWithGroundCallback,
+      this
+    );
     this.physics.add.collider(
       this.player,
       this.obstacleManager.platforms,
@@ -104,6 +188,7 @@ export class MainGame extends Phaser.Scene {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     });
+    this.explosionEmitter.setDepth(12);
 
     this.sparkEmitter = this.add.particles(0, 0, 'spark_red', {
       speed: { min: 60, max: 180 },
@@ -112,6 +197,7 @@ export class MainGame extends Phaser.Scene {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     });
+    this.sparkEmitter.setDepth(12);
 
     this.pickupEmitter = this.add.particles(0, 0, 'particle', {
       speed: { min: 60, max: 190 },
@@ -120,6 +206,7 @@ export class MainGame extends Phaser.Scene {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     });
+    this.pickupEmitter.setDepth(12);
 
     if (this.textures.exists('wind_streak')) {
       this.windEmitter = this.add.particles(width + 40, height * 0.42, 'wind_streak', {
@@ -321,6 +408,17 @@ export class MainGame extends Phaser.Scene {
     }
 
     this.physics.world.setBounds(0, 0, width, height);
+    this.physics.world.setBoundsCollision(true, true, true, false);
+    this.obstacleManager?.syncRoadGapHeights(height);
+
+    if (this.sectorSun) {
+      this.sectorSun.setPosition(width * 0.72, Math.max(92, height - gh - 185));
+    }
+
+    if (this.searchlights.length >= 2) {
+      this.searchlights[0].setPosition(width * 0.28, height - gh + 10);
+      this.searchlights[1].setPosition(width * 0.74, height - gh + 10);
+    }
 
     if (this.windEmitter) {
       this.windEmitter.setPosition(width + 40, height * 0.42);
@@ -329,11 +427,25 @@ export class MainGame extends Phaser.Scene {
     if (this.player) {
       const targetX = Math.min(130, Math.max(76, width * 0.16));
       this.player.x = targetX;
-      if (this.player.y > height - gh - 28) {
+      if (!this.isStarted && this.player.y > height - gh - 28) {
         this.player.y = height - gh - 36;
       }
     }
   }
+
+  private shouldCollideWithGroundCallback = (): boolean => {
+    if (!this.player) return true;
+    const gh = getGroundHeight(this.scale.height);
+    const groundTop = this.scale.height - gh;
+    const gaps = this.obstacleManager ? this.obstacleManager.getActiveGapSpans() : [];
+    return shouldCollideWithGround(
+      this.player.x,
+      this.player.y,
+      groundTop,
+      gaps,
+      this.player.overdriveActive
+    );
+  };
 
   private applyProgressToPlayer() {
     if (!this.player) return;
@@ -351,6 +463,99 @@ export class MainGame extends Phaser.Scene {
     this.cityFar?.setTint(palette.cityFarTint);
     this.cityNear?.setTint(palette.cityNearTint);
     this.ground?.setTint(palette.groundTint);
+    this.applySectorEnvironment(sectorIdx, true);
+  }
+
+  private applySectorEnvironment(sectorIdx: number, immediate: boolean) {
+    const themeIdx = sectorIdx % SECTORS_PALETTE.length;
+
+    // Sector 3 (Solar Amber): reveal synthwave sun behind skyline
+    if (this.sectorSun) {
+      const targetAlpha = themeIdx === 2 ? 0.85 : 0;
+      if (immediate) {
+        this.sectorSun.setAlpha(targetAlpha);
+      } else {
+        this.tweens.add({
+          targets: this.sectorSun,
+          alpha: targetAlpha,
+          duration: 1100,
+        });
+      }
+    }
+
+    // Sector 2 (Crimson Grid): activate sweeping diagonal sky searchlights
+    const beamTargetAlpha = themeIdx === 1 ? 0.56 : 0;
+    this.searchlights.forEach((beam) => {
+      if (immediate) {
+        beam.setAlpha(beamTargetAlpha);
+      } else {
+        this.tweens.add({
+          targets: beam,
+          alpha: beamTargetAlpha,
+          duration: 900,
+        });
+      }
+    });
+
+    // Sector 4 (Ultraviolet Core): unlock extra aerial hover-car traffic
+    this.hoverTraffic.forEach((car) => {
+      const targetAlpha = car.extraSectorOnly ? (themeIdx >= 3 ? car.baseAlpha : 0) : car.baseAlpha;
+      if (immediate) {
+        car.sprite.setAlpha(targetAlpha);
+      } else {
+        this.tweens.add({
+          targets: car.sprite,
+          alpha: targetAlpha,
+          duration: 800,
+        });
+      }
+    });
+
+    // Wind / Neon Rain streaks per sector
+    if (this.windEmitter) {
+      if (themeIdx >= 1) {
+        const windTint =
+          themeIdx === 1 ? 0xff6b8b : themeIdx === 2 ? 0xffc857 : 0xc084fc;
+        this.windEmitter.particleTint = windTint;
+        this.windEmitter.frequency = themeIdx === 1 ? 92 : themeIdx === 2 ? 78 : 48;
+        if (!this.windEmitter.emitting) {
+          this.windEmitter.start();
+        }
+      } else if (this.windEmitter.emitting) {
+        this.windEmitter.stop();
+      }
+    }
+  }
+
+  private updateAmbientAtmosphere(time: number, delta: number) {
+    const { width, height } = this.scale;
+    const gh = getGroundHeight(height);
+    const skySpan = Math.max(120, height - gh - 45);
+    const dtSec = delta / 1000;
+
+    if (this.sectorSun && this.sectorSun.alpha > 0.01) {
+      const baseSunY = Math.max(92, height - gh - 185);
+      this.sectorSun.y = baseSunY + Math.sin(time * 0.0008) * 3;
+    }
+
+    for (let i = 0; i < this.searchlights.length; i++) {
+      const beam = this.searchlights[i];
+      if (beam.alpha > 0.01) {
+        const centerAngle = i === 0 ? 14 : -14;
+        beam.angle = centerAngle + Math.sin(time * 0.0011 + i * 2.1) * 22;
+      }
+    }
+
+    for (let i = 0; i < this.hoverTraffic.length; i++) {
+      const car = this.hoverTraffic[i];
+      car.sprite.x += car.speedX * dtSec;
+      car.sprite.y = 45 + skySpan * car.baseYRatio + Math.sin(time * 0.0025 + car.phase) * 4;
+      if (car.speedX < 0 && car.sprite.x < -50) {
+        car.sprite.x = width + 50;
+      } else if (car.speedX > 0 && car.sprite.x > width + 50) {
+        car.sprite.x = -50;
+      }
+    }
   }
 
   private transitionToSector(sectorIdx: number) {
@@ -382,16 +587,7 @@ export class MainGame extends Phaser.Scene {
     tweenTint(this.ground, palette.groundTint);
 
     soundEngine.playSectorChange();
-    if (this.windEmitter) {
-      if (sectorIdx >= 1) {
-        this.windEmitter.frequency = Math.max(45, 115 - sectorIdx * 20);
-        if (!this.windEmitter.emitting) {
-          this.windEmitter.start();
-        }
-      } else if (this.windEmitter.emitting) {
-        this.windEmitter.stop();
-      }
-    }
+    this.applySectorEnvironment(sectorIdx, false);
     const { width, height } = this.scale;
     this.spawnFloatingText(width / 2, Math.max(100, height * 0.28), `SECTOR ${sectorIdx + 1} · ${palette.name.toUpperCase()}`, '#00f3ff');
   }
@@ -404,11 +600,14 @@ export class MainGame extends Phaser.Scene {
       if (this.cityFar) this.cityFar.tilePositionX += 0.06 * delta;
       if (this.cityNear) this.cityNear.tilePositionX += 0.12 * delta;
       if (this.ground) this.ground.tilePositionX += 0.22 * delta;
+      this.updateAmbientAtmosphere(time, delta);
       if (this.player) this.player.update(time, delta, false);
       return;
     }
 
     if (this.isGameOver) return;
+
+    this.updateAmbientAtmosphere(time, delta);
 
     const prevComboCount = this.combo.count;
     this.combo = tickComboDecay(this.combo, delta);
@@ -450,6 +649,14 @@ export class MainGame extends Phaser.Scene {
 
     if (this.player) {
       this.player.update(time, delta, true);
+
+      const gh = getGroundHeight(this.scale.height);
+      const groundTop = this.scale.height - gh;
+      if (this.player.y > groundTop + 34) {
+        this.triggerFallGameOver();
+        return;
+      }
+
       if (
         (this.player.shieldRemaining > 0 ||
           this.player.magnetRemaining > 0 ||
@@ -564,6 +771,16 @@ export class MainGame extends Phaser.Scene {
       return;
     }
 
+    this.triggerFatalGameOver();
+  };
+
+  private triggerFallGameOver() {
+    if (this.isGameOver || !this.isStarted || !this.player) return;
+    this.triggerFatalGameOver();
+  }
+
+  private triggerFatalGameOver() {
+    if (!this.player) return;
     this.cameras.main.shake(280, 0.016);
     this.isGameOver = true;
     this.windEmitter?.stop();
@@ -581,7 +798,7 @@ export class MainGame extends Phaser.Scene {
       comboCount: this.combo.count,
       comboMultiplier: this.combo.multiplier,
     });
-  };
+  }
 
   private handlePlatformLand = (_playerObj: unknown, platformObj: unknown) => {
     if (!this.isStarted || this.isGameOver || !this.player || !this.player.body) return;
@@ -725,7 +942,7 @@ export class MainGame extends Phaser.Scene {
       fontSize: '15px',
       fontStyle: 'bold',
       color,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(16);
 
     this.tweens.add({
       targets: text,

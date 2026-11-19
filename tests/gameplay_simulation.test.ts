@@ -8,9 +8,11 @@ import {
   computeSectorIndex,
   computeSpeedForScore,
   getComboMultiplier,
+  isOverRoadGap,
   LaserState,
   resetCombo,
   resolveDroneBulletHit,
+  shouldCollideWithGround,
   stepRunDistance,
   tickComboDecay,
 } from '../utils/gameRules';
@@ -122,9 +124,39 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
     expect(computeRefilledFuel(maxLv4 + 500, maxLv4)).toBe(maxLv4);
   });
 
-  it('keeps Overdrive charge pacing balanced around ~500m rather than triggering prematurely', () => {
-    // Typical 100m has ~12 coins + ~2 drones -> 12*2 + 2*6 = 36% per ~180m -> ~500m to hit 100%
-    const chargePer100mLowEstimate = 8 * GAME_CONFIG.OVERDRIVE_CHARGE_PER_COIN + 1 * GAME_CONFIG.OVERDRIVE_CHARGE_PER_DRONE;
-    expect(chargePer100mLowEstimate).toBeLessThanOrEqual(25);
+  it('keeps Overdrive charge pacing balanced around ~600m rather than triggering prematurely', () => {
+    // Typical 100m has ~8-12 coins + ~1-2 drones -> ~11-16% per 100m -> ~600m to hit 100%
+    const chargePer100mLowEstimate =
+      8 * GAME_CONFIG.OVERDRIVE_CHARGE_PER_COIN + 1 * GAME_CONFIG.OVERDRIVE_CHARGE_PER_DRONE;
+    expect(chargePer100mLowEstimate).toBeLessThanOrEqual(15);
+    expect(chargePer100mLowEstimate).toBeGreaterThanOrEqual(8);
+  });
+
+  it('scales speed smoothly at +20px/s every 220m starting from 420px/s', () => {
+    expect(computeSpeedForScore(0)).toBe(420);
+    expect(computeSpeedForScore(219)).toBe(420);
+    expect(computeSpeedForScore(220)).toBe(440);
+    expect(computeSpeedForScore(440)).toBe(460);
+    expect(computeSpeedForScore(660)).toBe(480);
+    expect(computeSpeedForScore(99999)).toBe(GAME_CONFIG.MAX_SPEED);
+  });
+
+  it('disables ground collision cleanly over road chasms, blocks edge-snapping once fallen, and hovers in Overdrive', () => {
+    const gaps = [{ leftX: 200, rightX: 340 }];
+    const groundTop = 624;
+
+    // Grace edge (within 10px lip) stays forgiving; middle of chasm disables ground collider
+    expect(isOverRoadGap(205, gaps)).toBe(false);
+    expect(isOverRoadGap(270, gaps)).toBe(true);
+    expect(shouldCollideWithGround(270, groundTop - 30, groundTop, gaps, false)).toBe(false);
+
+    // Solid ground outside chasm collides normally
+    expect(shouldCollideWithGround(150, groundTop - 30, groundTop, gaps, false)).toBe(true);
+
+    // Once player drops past groundTop - 16, trailing road lip cannot snap them back up
+    expect(shouldCollideWithGround(345, groundTop - 10, groundTop, gaps, false)).toBe(false);
+
+    // Hyper Overdrive hovers safely across chasms while above groundTop - 16
+    expect(shouldCollideWithGround(270, groundTop - 30, groundTop, gaps, true)).toBe(true);
   });
 });

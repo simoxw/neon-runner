@@ -32,10 +32,10 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-2.5">
           <div>
             <h2 className="font-display text-xl font-bold text-white [@media(max-height:500px)]:text-lg">
-              Runner Workshop
+              Officina Runner
             </h2>
             <p className="text-xs text-slate-400">
-              Available Credits:{' '}
+              Crediti Disponibili:{' '}
               <span className="font-mono-num font-bold text-emerald-400">
                 {progress.totalCredits}
               </span>
@@ -44,7 +44,7 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close upgrades"
+            aria-label="Chiudi officina"
             className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white cursor-pointer"
           >
             <X className="h-5 w-5" />
@@ -62,7 +62,7 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
             }`}
           >
             <Sparkles className="h-4 w-4" />
-            <span>Upgrades</span>
+            <span>Potenziamenti</span>
           </button>
 
           <button
@@ -75,7 +75,7 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
             }`}
           >
             <Palette className="h-4 w-4" />
-            <span>Skins</span>
+            <span>Skin</span>
           </button>
         </div>
 
@@ -119,7 +119,7 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
                     </div>
 
                     <div className="mt-2.5 text-xs text-slate-300">
-                      <span>Current: </span>
+                      <span>Attuale: </span>
                       <strong className="font-mono-num text-white">{item.formatValue(level)}</strong>
                       {!isMax && (
                         <span className="text-cyan-400"> → {item.formatValue(level + 1)}</span>
@@ -139,7 +139,7 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
                         : 'cursor-not-allowed border border-white/10 bg-white/5 text-slate-500'
                     }`}
                   >
-                    {isMax ? 'Max Level' : `Upgrade · ${cost} Credits`}
+                    {isMax ? 'Livello Max' : `Potenzia · ${cost} Crediti`}
                   </button>
                 </div>
               );
@@ -173,10 +173,10 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
                         <h3 className="text-sm font-bold text-white">{skin.name}</h3>
                         <p className="text-xs text-slate-400">
                           {isEquipped
-                            ? 'Active Suit'
+                            ? 'Tuta Attiva'
                             : isUnlocked
-                            ? 'Unlocked'
-                            : `${skin.cost} Credits`}
+                            ? 'Sbloccata'
+                            : `${skin.cost} Crediti`}
                         </p>
                       </div>
                     </div>
@@ -199,10 +199,10 @@ const UpgradesModal: React.FC<UpgradesModalProps> = ({
                     }`}
                   >
                     {isEquipped
-                      ? 'Equipped'
+                      ? 'Equipaggiata'
                       : isUnlocked
-                      ? 'Equip'
-                      : `Unlock · ${skin.cost} Credits`}
+                      ? 'Equipaggia'
+                      : `Sblocca · ${skin.cost} Crediti`}
                   </button>
                 </div>
               );

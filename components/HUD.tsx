@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, Flame, Magnet, Pause, Shield, Volume2, VolumeX } from 'lucide-react';
+import { Flame, Magnet, Pause, Shield, Trophy, Volume2, VolumeX } from 'lucide-react';
 import { ActiveBuffs } from '../types';
 
 export interface MissionToastData {
@@ -63,7 +63,7 @@ const HUD: React.FC<HUDProps> = ({
           </div>
           <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-300">
             <span className="font-mono-num font-bold text-emerald-400">+{runCredits}</span>
-            <span className="text-slate-400">Credits</span>
+            <span className="text-slate-400">Crediti</span>
             {comboCount >= 3 && (
               <>
                 <span aria-hidden="true" className="text-slate-600">·</span>
@@ -76,7 +76,7 @@ const HUD: React.FC<HUDProps> = ({
                       : 'text-slate-300'
                   }`}
                 >
-                  {comboMultiplier}x Streak ({comboCount})
+                  {comboMultiplier}x Serie ({comboCount})
                 </span>
               </>
             )}
@@ -87,7 +87,7 @@ const HUD: React.FC<HUDProps> = ({
           <button
             type="button"
             onClick={onToggleMute}
-            aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+            aria-label={muted ? 'Attiva audio' : 'Disattiva audio'}
             className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-[#0d1021]/80 text-slate-200 backdrop-blur-md transition hover:bg-white/10 active:scale-95 cursor-pointer"
           >
             {muted ? (
@@ -100,11 +100,11 @@ const HUD: React.FC<HUDProps> = ({
           <button
             type="button"
             onClick={onPause}
-            aria-label="Pause game"
+            aria-label="Pausa"
             className="inline-flex h-11 min-w-[44px] items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-[#0d1021]/80 px-3 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-white/10 active:scale-95 whitespace-nowrap cursor-pointer"
           >
             <Pause className="h-4 w-4" />
-            <span className="hidden sm:inline">Pause</span>
+            <span className="hidden sm:inline">Pausa</span>
           </button>
         </div>
       </div>
@@ -175,15 +175,12 @@ const HUD: React.FC<HUDProps> = ({
       </div>
 
       {missionToast && (
-        <div className="mt-1 inline-flex w-fit items-center gap-2 rounded-md border border-emerald-400/45 bg-[#0d1021]/92 px-3 py-1.5 text-xs shadow-lg backdrop-blur-md">
-          <Award className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-          <span className="font-semibold text-white">Mission Complete</span>
-          <span aria-hidden="true" className="text-slate-500">·</span>
-          <span className="text-slate-300">{missionToast.label}</span>
-          <span aria-hidden="true" className="text-slate-500">·</span>
-          <span className="font-mono-num font-bold text-emerald-400">
-            +{missionToast.reward} Credits
-          </span>
+        <div
+          role="status"
+          aria-label={`Missione completata: ${missionToast.label}`}
+          className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-cyan-400/70 bg-[#0d1021]/90 text-cyan-300 shadow-[0_0_20px_rgba(0,243,255,0.55)] backdrop-blur-md"
+        >
+          <Trophy className="h-5 w-5 text-cyan-300 drop-shadow-[0_0_8px_rgba(0,243,255,0.9)]" />
         </div>
       )}
     </div>

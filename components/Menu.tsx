@@ -83,7 +83,7 @@ const Menu: React.FC<MenuProps> = ({
             <RefreshCw
               className={`h-4 w-4 shrink-0 text-emerald-400 ${isUpdatingApp ? 'animate-spin' : ''}`}
             />
-            <span>New version available.</span>
+            <span>Nuova versione disponibile.</span>
           </div>
           <button
             type="button"
@@ -91,7 +91,7 @@ const Menu: React.FC<MenuProps> = ({
             onClick={onApplyUpdate}
             className="inline-flex min-h-[44px] items-center justify-center rounded-md bg-emerald-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 transition hover:bg-emerald-300 active:scale-95 disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            {isUpdatingApp ? 'Updating...' : 'Update Now'}
+            {isUpdatingApp ? 'Aggiornamento...' : 'Aggiorna'}
           </button>
         </div>
       )}
@@ -100,12 +100,12 @@ const Menu: React.FC<MenuProps> = ({
         <div className="mt-2 flex w-full max-w-md items-center justify-between gap-3 rounded-lg border border-cyan-400/40 bg-[#0d1021]/95 px-3.5 py-2 text-xs text-slate-200 shadow-lg">
           <div className="flex items-center gap-2">
             <RotateCw className="h-4 w-4 shrink-0 text-cyan-400" />
-            <span>Rotate your device sideways to play in landscape mode.</span>
+            <span>Ruota il dispositivo in orizzontale per giocare meglio.</span>
           </div>
           <button
             type="button"
             onClick={onDismissRotateHint}
-            aria-label="Dismiss rotation hint"
+            aria-label="Chiudi avviso rotazione"
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-white/10 hover:text-white cursor-pointer"
           >
             <X className="h-4 w-4" />
@@ -123,12 +123,12 @@ const Menu: React.FC<MenuProps> = ({
 
         <div className="mt-4 flex items-center gap-4 text-sm text-slate-300 [@media(max-height:500px)]:mt-2 [@media(max-height:500px)]:text-xs">
           <div>
-            <span className="text-slate-400">Best </span>
+            <span className="text-slate-400">Record </span>
             <span className="font-mono-num font-bold text-white">{highScore}m</span>
           </div>
           <span aria-hidden="true" className="text-slate-600">·</span>
           <div>
-            <span className="text-slate-400">Credits </span>
+            <span className="text-slate-400">Crediti </span>
             <span className="font-mono-num font-bold text-emerald-400">{totalCredits}</span>
           </div>
         </div>
@@ -139,7 +139,7 @@ const Menu: React.FC<MenuProps> = ({
             onClick={onStart}
             className="inline-flex min-h-[48px] items-center justify-center rounded-lg bg-cyan-400 px-8 py-3 text-base font-bold text-slate-950 shadow-lg shadow-cyan-500/25 transition hover:bg-cyan-300 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer [@media(max-height:500px)]:min-h-[44px] [@media(max-height:500px)]:py-2"
           >
-            Start Run
+            Avvia Corsa
           </button>
 
           <button
@@ -148,9 +148,9 @@ const Menu: React.FC<MenuProps> = ({
             className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-white/15 bg-[#0d1021]/90 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer [@media(max-height:500px)]:min-h-[44px] [@media(max-height:500px)]:py-2"
           >
             <Wrench className="h-4 w-4 text-amber-400" />
-            <span>Upgrades</span>
+            <span>Officina</span>
             {canAffordUpgrade && (
-              <span className="font-mono-num text-xs font-bold text-emerald-400">Ready</span>
+              <span className="font-mono-num text-xs font-bold text-emerald-400">Pronto</span>
             )}
           </button>
         </div>
@@ -158,8 +158,8 @@ const Menu: React.FC<MenuProps> = ({
         {missions.length > 0 && (
           <div className="mt-5 w-full rounded-lg border border-white/10 bg-[#0d1021]/82 px-4 py-3 text-left [@media(max-height:500px)]:mt-2.5 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2">
             <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-300 [@media(max-height:500px)]:mb-1.5">
-              <span>Active Missions</span>
-              <span className="text-slate-400">Bonus Credits</span>
+              <span>Missioni Attive</span>
+              <span className="text-slate-400">Crediti Bonus</span>
             </div>
             <div className="grid gap-2 [@media(max-height:500px)]:grid-cols-3 [@media(max-height:500px)]:gap-3">
               {missions.map((mission) => {
@@ -199,9 +199,9 @@ const Menu: React.FC<MenuProps> = ({
 
       <div className="w-full max-w-xl border-t border-white/10 pt-2.5 text-center text-xs text-slate-400 [@media(max-height:500px)]:pt-1.5">
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-          <span>Tap / Space / ↑: Jump &amp; Double Jump</span>
+          <span>Tap / Spazio / ↑: Salto e Doppio Salto</span>
           <span aria-hidden="true" className="text-slate-600">·</span>
-          <span>Hold in Air: Jetpack Boost</span>
+          <span>Tieni premuto in aria: Jetpack Boost</span>
         </div>
       </div>
     </div>

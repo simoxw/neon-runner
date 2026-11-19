@@ -1,4 +1,4 @@
-import { createMissionFromSeed } from '../constants';
+import { createMissionFromSeed, formatMissionLabel } from '../constants';
 import {
   ActiveMission,
   MissionType,
@@ -111,7 +111,7 @@ function sanitizeMissions(
       valid.push({
         id: m.id,
         type: m.type,
-        label: m.label,
+        label: formatMissionLabel(m.type, m.target),
         target: m.target,
         progress: clampedProgress,
         reward: m.reward,

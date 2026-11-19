@@ -92,6 +92,7 @@ describe('Progression, Workshop Upgrades & Storage Migration', () => {
     expect(loaded.upgrades.jetpackThruster).toBe(0); // migrated safely
     expect(loaded.missions).toHaveLength(3);
     expect(loaded.missions.every((m) => (m.type as string) !== 'fastFalls')).toBe(true);
+    expect(loaded.missions.some((m) => /Corri|Distruggi|Raccogli|Esegui|Atterra|Attiva/.test(m.label))).toBe(true);
   });
 
   it('enforces upgrade purchase credits, caps at max level, and unlocks Dual Pulse at Lv 3', () => {

@@ -83,6 +83,7 @@ export class Preloader extends Phaser.Scene {
     this.createPowerupTextures();
     this.createMissileTextures();
     this.createLaserAndRingTextures();
+    this.createEnvironmentTextures();
     this.createParticleAndBulletTextures();
   }
 
@@ -131,15 +132,26 @@ export class Preloader extends Phaser.Scene {
     while (x < 1000) {
       seed = (seed * 31 + 7) % 1000;
       const w = 52 + (seed % 58);
-      const h = 150 + ((seed * 3) % 210);
+      const h = 155 + ((seed * 3) % 215);
       const y = 420 - h;
 
       ctx.fillStyle = '#0d0c1d';
       ctx.fillRect(x, y, w - 3, h);
 
-      if (h > 250) {
+      // Spire & aviation beacon
+      if (h > 240) {
         ctx.fillStyle = 'rgba(0, 243, 255, 0.35)';
-        ctx.fillRect(x + w / 2 - 1, y - 24, 2, 24);
+        ctx.fillRect(x + w / 2 - 1, y - 28, 2, 28);
+        ctx.fillStyle = seed % 2 === 0 ? '#ff2a6d' : '#00f3ff';
+        ctx.fillRect(x + w / 2 - 2, y - 31, 4, 4);
+      }
+
+      // Distant skybridges every few towers
+      if (seed % 3 === 0 && x + w + 28 < 1000) {
+        ctx.fillStyle = 'rgba(18, 20, 44, 0.9)';
+        ctx.fillRect(x + w - 4, y + 60, 22, 6);
+        ctx.fillStyle = 'rgba(0, 243, 255, 0.28)';
+        ctx.fillRect(x + w - 4, y + 60, 22, 1.5);
       }
 
       ctx.fillStyle = 'rgba(0, 243, 255, 0.14)';
@@ -166,22 +178,59 @@ export class Preloader extends Phaser.Scene {
     let seed = 43;
     while (x < 1000) {
       seed = (seed * 37 + 13) % 1000;
-      const w = 48 + (seed % 64);
-      const h = 110 + ((seed * 5) % 180);
+      const w = 54 + (seed % 64);
+      const h = 115 + ((seed * 5) % 180);
       const y = 340 - h;
 
       ctx.fillStyle = '#121329';
       ctx.fillRect(x, y, w - 4, h);
 
       // Rooftop neon edge
-      ctx.fillStyle = seed % 2 === 0 ? 'rgba(0, 243, 255, 0.5)' : 'rgba(255, 42, 109, 0.5)';
-      ctx.fillRect(x, y, w - 4, 2);
+      ctx.fillStyle = seed % 2 === 0 ? 'rgba(0, 243, 255, 0.6)' : 'rgba(255, 42, 109, 0.6)';
+      ctx.fillRect(x, y, w - 4, 2.5);
 
-      // Windows
+      // Rooftop holographic billboards
+      if (seed % 4 === 0 && w >= 66) {
+        const bw = 34;
+        const bh = 16;
+        const bx = x + 8;
+        const by = y - bh - 6;
+        ctx.fillStyle = '#1c1f40';
+        ctx.fillRect(bx + 6, y - 6, 3, 6);
+        ctx.fillRect(bx + bw - 9, y - 6, 3, 6);
+        ctx.fillStyle = 'rgba(13, 16, 33, 0.9)';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeStyle = seed % 8 === 0 ? '#00f3ff' : '#ff2a6d';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(bx, by, bw, bh);
+        // Geometric hologram bars inside billboard
+        ctx.fillStyle = seed % 8 === 0 ? '#00f3ff' : '#ffc857';
+        ctx.fillRect(bx + 5, by + 5, 16, 2.5);
+        ctx.fillRect(bx + 5, by + 10, 24, 2);
+      }
+
+      // Vertical neon street signs on building sides
+      if (seed % 3 === 1 && h > 150) {
+        const sx = x + w - 12;
+        const sy = y + 24;
+        ctx.fillStyle = seed % 2 === 0 ? 'rgba(255, 42, 109, 0.72)' : 'rgba(0, 243, 255, 0.72)';
+        ctx.fillRect(sx, sy, 5, 36);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillRect(sx + 1.5, sy + 4, 2, 7);
+        ctx.fillRect(sx + 1.5, sy + 15, 2, 8);
+        ctx.fillRect(sx + 1.5, sy + 27, 2, 5);
+      }
+
+      // Multi-tone lit windows
       for (let wy = y + 14; wy < 320; wy += 18) {
-        for (let wx = x + 7; wx < x + w - 12; wx += 12) {
+        for (let wx = x + 7; wx < x + w - 16; wx += 12) {
           if ((wx * wy + seed) % 5 === 0) {
-            ctx.fillStyle = (wx + seed) % 2 === 0 ? 'rgba(0, 243, 255, 0.45)' : 'rgba(255, 200, 87, 0.35)';
+            ctx.fillStyle =
+              (wx + seed) % 3 === 0
+                ? 'rgba(0, 243, 255, 0.45)'
+                : (wx + seed) % 3 === 1
+                ? 'rgba(255, 200, 87, 0.38)'
+                : 'rgba(255, 42, 109, 0.34)';
             ctx.fillRect(wx, wy, 6, 9);
           }
         }
@@ -193,36 +242,165 @@ export class Preloader extends Phaser.Scene {
 
   private createGroundTexture() {
     if (this.textures.exists('ground')) return;
-    const canvas = this.textures.createCanvas('ground', 400, 96);
+    const canvas = this.textures.createCanvas('ground', 512, 96);
     if (!canvas) return;
     const ctx = canvas.context;
 
-    ctx.fillStyle = '#080914';
-    ctx.fillRect(0, 0, 400, 96);
+    // 1. Deep dark sky-void backdrop beneath elevated viaduct arches
+    const voidGrad = ctx.createLinearGradient(0, 24, 0, 96);
+    voidGrad.addColorStop(0, '#050712');
+    voidGrad.addColorStop(0.65, '#070a18');
+    voidGrad.addColorStop(1, '#0b1026');
+    ctx.fillStyle = voidGrad;
+    ctx.fillRect(0, 0, 512, 96);
 
-    // Top glowing rail
-    ctx.fillStyle = '#00f3ff';
-    ctx.fillRect(0, 0, 400, 4);
-    ctx.fillStyle = 'rgba(0, 243, 255, 0.25)';
-    ctx.fillRect(0, 4, 400, 5);
+    // Subtle city underglow rising between viaduct piers
+    for (let x = 0; x < 512; x += 256) {
+      const archGlow = ctx.createRadialGradient(x + 128, 96, 12, x + 128, 96, 108);
+      archGlow.addColorStop(0, 'rgba(0, 243, 255, 0.14)');
+      archGlow.addColorStop(1, 'rgba(0, 243, 255, 0)');
+      ctx.fillStyle = archGlow;
+      ctx.fillRect(x, 36, 256, 60);
+    }
 
-    // Industrial deck trusses
-    ctx.strokeStyle = '#1d203d';
-    ctx.lineWidth = 2;
-    for (let x = 0; x < 400; x += 40) {
+    // 2. Sculpted 256px viaduct arch bays & diagonal steel V-struts
+    for (let bayX = 0; bayX < 512; bayX += 256) {
+      const spanStart = bayX + 34;
+      const spanEnd = bayX + 222;
+      const spanMid = bayX + 128;
+
+      // Arched steel soffit silhouette under the deck
+      ctx.fillStyle = '#11162e';
       ctx.beginPath();
-      ctx.moveTo(x, 12);
-      ctx.lineTo(x + 40, 86);
-      ctx.moveTo(x + 40, 12);
-      ctx.lineTo(x, 86);
+      ctx.moveTo(spanStart, 96);
+      ctx.lineTo(spanStart, 46);
+      ctx.quadraticCurveTo(spanMid, 24, spanEnd, 46);
+      ctx.lineTo(spanEnd, 96);
+      ctx.lineTo(spanEnd - 14, 96);
+      ctx.lineTo(spanEnd - 14, 54);
+      ctx.quadraticCurveTo(spanMid, 33, spanStart + 14, 54);
+      ctx.lineTo(spanStart + 14, 96);
+      ctx.closePath();
+      ctx.fill();
+
+      // Clean diagonal support V-trusses anchored to central girder
+      ctx.strokeStyle = '#1c2345';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(spanStart + 18, 86);
+      ctx.lineTo(spanMid - 34, 42);
+      ctx.lineTo(spanMid, 82);
+      ctx.lineTo(spanMid + 34, 42);
+      ctx.lineTo(spanEnd - 18, 86);
       ctx.stroke();
-      ctx.strokeRect(x, 12, 40, 74);
+
+      // Crisp inner highlight along truss edges
+      ctx.strokeStyle = 'rgba(0, 243, 255, 0.16)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(spanStart + 18, 84);
+      ctx.lineTo(spanMid - 34, 40);
+      ctx.moveTo(spanMid + 34, 40);
+      ctx.lineTo(spanEnd - 18, 84);
+      ctx.stroke();
     }
 
-    for (let x = 16; x < 400; x += 80) {
-      ctx.fillStyle = '#ff2a6d';
-      ctx.fillRect(x, 15, 10, 3);
+    // 3. Single clean horizontal energy conduit bus beneath the deck lip
+    ctx.fillStyle = '#0d1124';
+    ctx.fillRect(0, 28, 512, 10);
+    ctx.fillStyle = 'rgba(0, 243, 255, 0.22)';
+    ctx.fillRect(0, 31, 512, 4);
+    ctx.fillStyle = '#00f3ff';
+    ctx.fillRect(0, 32.5, 512, 1.5);
+
+    // Metallic pipe clamps every 128px
+    for (let x = 122; x < 512; x += 256) {
+      ctx.fillStyle = '#242c54';
+      ctx.fillRect(x, 26, 12, 14);
+      ctx.fillStyle = '#ffc857';
+      ctx.fillRect(x + 4, 31, 4, 4);
     }
+
+    // 4. Heavy structural viaduct piers every 256px (split across tile seam at 0 / 256)
+    const drawPierColumn = (px: number, w: number) => {
+      // Main concrete/steel shaft
+      const pierGrad = ctx.createLinearGradient(px, 24, px + w, 24);
+      pierGrad.addColorStop(0, '#232b52');
+      pierGrad.addColorStop(0.3, '#171d3a');
+      pierGrad.addColorStop(1, '#0e1226');
+      ctx.fillStyle = pierGrad;
+      ctx.fillRect(px, 24, w, 72);
+
+      // Left edge rim highlight & right shadow border
+      ctx.fillStyle = '#333f73';
+      ctx.fillRect(px, 24, 2, 72);
+      ctx.fillStyle = '#070914';
+      ctx.fillRect(px + w - 2, 24, 2, 72);
+
+      // Clean vertical cyan core light strip centered on pier
+      const cx = Math.floor(px + w / 2 - 2);
+      ctx.fillStyle = 'rgba(0, 243, 255, 0.25)';
+      ctx.fillRect(cx - 2, 34, 8, 52);
+      ctx.fillStyle = '#00f3ff';
+      ctx.fillRect(cx, 36, 4, 48);
+
+      // Top pier capital bracket & amber safety marker
+      ctx.fillStyle = '#28315c';
+      ctx.fillRect(px - 3, 24, w + 6, 7);
+      ctx.fillStyle = '#ffc857';
+      ctx.fillRect(cx - 3, 26, 10, 3);
+    };
+
+    drawPierColumn(0, 34);
+    drawPierColumn(256, 34);
+
+    // 5. Overhanging upper highway deck (y = 0..24) — razor-sharp playable surface
+    // Drop shadow cast beneath overhanging road deck
+    const overhangShadow = ctx.createLinearGradient(0, 22, 0, 30);
+    overhangShadow.addColorStop(0, 'rgba(0, 0, 0, 0.72)');
+    overhangShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = overhangShadow;
+    ctx.fillRect(0, 22, 512, 8);
+
+    // Roadway steel fascia & bevel
+    const deckGrad = ctx.createLinearGradient(0, 3, 0, 23);
+    deckGrad.addColorStop(0, '#1e264a');
+    deckGrad.addColorStop(0.55, '#141933');
+    deckGrad.addColorStop(1, '#0e1226');
+    ctx.fillStyle = deckGrad;
+    ctx.fillRect(0, 3, 512, 19);
+
+    // Clean lower steel flange rim
+    ctx.fillStyle = '#2b3666';
+    ctx.fillRect(0, 20, 512, 3);
+    ctx.fillStyle = '#070912';
+    ctx.fillRect(0, 23, 512, 1.5);
+
+    // Crisp spaced speed chevrons & amber deck reflectors (every 64px, zero clutter)
+    for (let x = 0; x < 512; x += 64) {
+      // Subtle angled metallic deck seam
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.beginPath();
+      ctx.moveTo(x + 14, 5);
+      ctx.lineTo(x + 28, 5);
+      ctx.lineTo(x + 20, 19);
+      ctx.lineTo(x + 6, 19);
+      ctx.closePath();
+      ctx.fill();
+
+      // Clean cyan lane dash
+      ctx.fillStyle = 'rgba(0, 243, 255, 0.55)';
+      ctx.fillRect(x + 38, 10, 14, 3);
+    }
+
+    // Razor-sharp top Mag-Rail (white-hot core + cyan glow)
+    ctx.fillStyle = 'rgba(0, 243, 255, 0.32)';
+    ctx.fillRect(0, 3, 512, 4);
+    ctx.fillStyle = '#00f3ff';
+    ctx.fillRect(0, 0, 512, 3.5);
+    ctx.fillStyle = '#d8ffff';
+    ctx.fillRect(0, 0, 512, 1.2);
+
     canvas.refresh();
 
     if (!this.textures.exists('sky_platform')) {
@@ -694,6 +872,118 @@ export class Preloader extends Phaser.Scene {
         grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, 48, 3);
+        canvas.refresh();
+      }
+    }
+  }
+
+  private createEnvironmentTextures() {
+    if (!this.textures.exists('road_gap')) {
+      const canvas = this.textures.createCanvas('road_gap', 160, 96);
+      if (canvas) {
+        const ctx = canvas.context;
+        // Abyssal drop shaft cleanly cutting the viaduct deck
+        const dropGrad = ctx.createLinearGradient(0, 0, 0, 96);
+        dropGrad.addColorStop(0, '#090a18');
+        dropGrad.addColorStop(0.55, '#05060f');
+        dropGrad.addColorStop(1, '#020207');
+        ctx.fillStyle = dropGrad;
+        ctx.fillRect(0, 0, 160, 96);
+
+        // Sheared viaduct end-pillars flanking the gap
+        ctx.fillStyle = '#1c2345';
+        ctx.fillRect(0, 0, 10, 96);
+        ctx.fillRect(150, 0, 10, 96);
+        ctx.fillStyle = '#2c3769';
+        ctx.fillRect(8, 22, 3, 74);
+        ctx.fillRect(149, 22, 3, 74);
+
+        // High-contrast crimson/amber hazard edge caps at deck level
+        ctx.fillStyle = '#ff2a6d';
+        ctx.fillRect(0, 0, 13, 12);
+        ctx.fillRect(147, 0, 13, 12);
+        ctx.fillStyle = '#ffc857';
+        ctx.fillRect(2, 3, 8, 4);
+        ctx.fillRect(150, 3, 8, 4);
+
+        // Faint downward laser-drop guide lines inside shaft walls
+        ctx.fillStyle = 'rgba(255, 42, 109, 0.22)';
+        ctx.fillRect(11, 0, 4, 96);
+        ctx.fillRect(145, 0, 4, 96);
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('hover_car_0')) {
+      const canvas = this.textures.createCanvas('hover_car_0', 36, 10);
+      if (canvas) {
+        const ctx = canvas.context;
+        // Left-bound sleek speeder with cyan headlight & magenta thruster tail
+        ctx.fillStyle = '#1a203d';
+        ctx.fillRect(6, 2, 20, 6);
+        ctx.fillStyle = '#00f3ff';
+        ctx.fillRect(2, 4, 6, 3);
+        ctx.fillStyle = '#ff2a6d';
+        ctx.fillRect(26, 4, 9, 2);
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('hover_car_1')) {
+      const canvas = this.textures.createCanvas('hover_car_1', 36, 10);
+      if (canvas) {
+        const ctx = canvas.context;
+        // Right-bound distant speeder with amber headlight & cyan tail
+        ctx.fillStyle = '#1a203d';
+        ctx.fillRect(10, 2, 20, 6);
+        ctx.fillStyle = '#ffc857';
+        ctx.fillRect(28, 4, 6, 3);
+        ctx.fillStyle = '#00f3ff';
+        ctx.fillRect(1, 4, 9, 2);
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('sector_sun')) {
+      const canvas = this.textures.createCanvas('sector_sun', 180, 180);
+      if (canvas) {
+        const ctx = canvas.context;
+        const grad = ctx.createLinearGradient(0, 20, 0, 170);
+        grad.addColorStop(0, 'rgba(255, 224, 102, 0.85)');
+        grad.addColorStop(0.55, 'rgba(255, 138, 0, 0.72)');
+        grad.addColorStop(1, 'rgba(255, 42, 109, 0.45)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(90, 90, 74, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Retro synthwave horizontal scanline slices in lower half
+        ctx.globalCompositeOperation = 'destination-out';
+        for (let y = 96; y < 164; y += 11) {
+          const sliceH = 2 + Math.floor((y - 96) / 18);
+          ctx.fillRect(10, y, 160, sliceH);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('searchlight_beam')) {
+      const canvas = this.textures.createCanvas('searchlight_beam', 120, 320);
+      if (canvas) {
+        const ctx = canvas.context;
+        const grad = ctx.createLinearGradient(60, 320, 60, 0);
+        grad.addColorStop(0, 'rgba(255, 42, 109, 0.34)');
+        grad.addColorStop(0.6, 'rgba(255, 42, 109, 0.09)');
+        grad.addColorStop(1, 'rgba(255, 42, 109, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(50, 320);
+        ctx.lineTo(70, 320);
+        ctx.lineTo(116, 0);
+        ctx.lineTo(4, 0);
+        ctx.closePath();
+        ctx.fill();
         canvas.refresh();
       }
     }
