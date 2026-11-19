@@ -1,13 +1,23 @@
 import Phaser from 'phaser';
 import {
   GAME_CONFIG,
-  getCreditMultiplier,
   getGroundHeight,
   getMagnetDurationMs,
   getShieldDurationMs,
   SECTORS_PALETTE,
 } from '../../constants';
 import { PlayerProgress } from '../../types';
+import {
+  advanceComboOnEvent,
+  ComboState,
+  computeCreditReward,
+  computeSectorIndex,
+  computeSpeedForScore,
+  resetCombo,
+  resolveDroneBulletHit,
+  stepRunDistance,
+  tickComboDecay,
+} from '../../utils/gameRules';
 import { soundEngine } from '../../utils/sound';
 import { loadProgress } from '../../utils/storage';
 import { ObstacleManager } from '../entities/ObstacleManager';
@@ -26,11 +36,14 @@ export class MainGame extends Phaser.Scene {
   private explosionEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private pickupEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private windEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
 
   public score: number = 0;
   public distance: number = 0;
   public runCredits: number = 0;
   public dronesDestroyed: number = 0;
+  public platformsLanded: number = 0;
+  public combo: ComboState = resetCombo();
   public currentSpeed: number = GAME_CONFIG.BASE_SPEED;
   public currentSectorIndex: number = 0;
   public isGameOver: boolean = false;
@@ -76,7 +89,13 @@ export class MainGame extends Phaser.Scene {
     this.physics.add.collider(this.player, this.groundBody);
 
     this.obstacleManager = new ObstacleManager(this);
-    this.physics.add.collider(this.player, this.obstacleManager.platforms);
+    this.physics.add.collider(
+      this.player,
+      this.obstacleManager.platforms,
+      this.handlePlatformLand as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
 
     this.explosionEmitter = this.add.particles(0, 0, 'spark_yellow', {
       speed: { min: 80, max: 280 },
@@ -102,11 +121,35 @@ export class MainGame extends Phaser.Scene {
       emitting: false,
     });
 
+    if (this.textures.exists('wind_streak')) {
+      this.windEmitter = this.add.particles(width + 40, height * 0.42, 'wind_streak', {
+        x: width + 40,
+        y: { min: 48, max: Math.max(120, height - gh - 40) },
+        speedX: { min: -760, max: -460 },
+        speedY: 0,
+        alpha: { start: 0.42, end: 0 },
+        scaleX: { min: 0.8, max: 1.6 },
+        lifespan: 1900,
+        frequency: 110,
+        quantity: 1,
+        emitting: false,
+      });
+      this.windEmitter.setDepth(2);
+    }
+
     // Overlaps
     this.physics.add.overlap(
       this.player,
       this.obstacleManager.barriers,
       this.handleHazardCollision as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
+
+    this.physics.add.overlap(
+      this.player,
+      this.obstacleManager.lasers,
+      this.handleLaserCollision as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
       undefined,
       this
     );
@@ -123,6 +166,14 @@ export class MainGame extends Phaser.Scene {
       this.player,
       this.obstacleManager.missiles,
       this.handleHazardCollision as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
+
+    this.physics.add.overlap(
+      this.player,
+      this.obstacleManager.boostRings,
+      this.handleBoostRingCollect as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
       undefined,
       this
     );
@@ -161,57 +212,28 @@ export class MainGame extends Phaser.Scene {
       );
     }
 
-    let pointerDownY = 0;
-    let swipeFastFallFired = false;
-
-    const onPointerDown = (pointer?: Phaser.Input.Pointer) => {
+    const onPointerDown = () => {
       if (!this.isStarted || this.isGameOver || this.isPausedState) return;
-      if (pointer) {
-        pointerDownY = pointer.y;
-        swipeFastFallFired = false;
-      }
       this.player?.handlePress(this.time.now);
     };
 
-    const onPointerMove = (pointer: Phaser.Input.Pointer) => {
-      if (!pointer.isDown || swipeFastFallFired) return;
-      if (!this.isStarted || this.isGameOver || this.isPausedState) return;
-      if (pointer.y - pointerDownY > 36) {
-        swipeFastFallFired = true;
-        this.player?.triggerFastFall();
-      }
-    };
-
     const onPointerUp = () => {
-      swipeFastFallFired = false;
       this.player?.handleRelease();
     };
 
-    const onFastFallKey = () => {
-      if (!this.isStarted || this.isGameOver || this.isPausedState) return;
-      this.player?.triggerFastFall();
-    };
-
     this.input.on('pointerdown', onPointerDown);
-    this.input.on('pointermove', onPointerMove);
     this.input.on('pointerup', onPointerUp);
     this.input.on('pointercancel', onPointerUp);
 
     const spaceKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     const upKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-    const downKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    const sKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     const escKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const pKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P);
 
-    const onJumpKeyDown = () => onPointerDown();
-
-    spaceKey?.on('down', onJumpKeyDown);
+    spaceKey?.on('down', onPointerDown);
     spaceKey?.on('up', onPointerUp);
-    upKey?.on('down', onJumpKeyDown);
+    upKey?.on('down', onPointerDown);
     upKey?.on('up', onPointerUp);
-    downKey?.on('down', onFastFallKey);
-    sKey?.on('down', onFastFallKey);
 
     const togglePauseFromKey = () => {
       if (!this.isStarted || this.isGameOver) return;
@@ -247,15 +269,12 @@ export class MainGame extends Phaser.Scene {
 
     this.events.once('shutdown', () => {
       this.input.off('pointerdown', onPointerDown);
-      this.input.off('pointermove', onPointerMove);
       this.input.off('pointerup', onPointerUp);
       this.input.off('pointercancel', onPointerUp);
-      spaceKey?.off('down', onJumpKeyDown);
+      spaceKey?.off('down', onPointerDown);
       spaceKey?.off('up', onPointerUp);
-      upKey?.off('down', onJumpKeyDown);
+      upKey?.off('down', onPointerDown);
       upKey?.off('up', onPointerUp);
-      downKey?.off('down', onFastFallKey);
-      sKey?.off('down', onFastFallKey);
       escKey?.off('down', togglePauseFromKey);
       pKey?.off('down', togglePauseFromKey);
       this.scale.off('resize', this.handleResize, this);
@@ -303,6 +322,10 @@ export class MainGame extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, width, height);
 
+    if (this.windEmitter) {
+      this.windEmitter.setPosition(width + 40, height * 0.42);
+    }
+
     if (this.player) {
       const targetX = Math.min(130, Math.max(76, width * 0.16));
       this.player.x = targetX;
@@ -316,7 +339,8 @@ export class MainGame extends Phaser.Scene {
     if (!this.player) return;
     this.player.setUpgradeLevels(
       this.progress.upgrades.blasterRate,
-      this.progress.upgrades.magnetDuration
+      this.progress.upgrades.magnetDuration,
+      this.progress.upgrades.jetpackThruster
     );
     this.player.setSkin(this.progress.equippedSkin);
   }
@@ -358,6 +382,16 @@ export class MainGame extends Phaser.Scene {
     tweenTint(this.ground, palette.groundTint);
 
     soundEngine.playSectorChange();
+    if (this.windEmitter) {
+      if (sectorIdx >= 1) {
+        this.windEmitter.frequency = Math.max(45, 115 - sectorIdx * 20);
+        if (!this.windEmitter.emitting) {
+          this.windEmitter.start();
+        }
+      } else if (this.windEmitter.emitting) {
+        this.windEmitter.stop();
+      }
+    }
     const { width, height } = this.scale;
     this.spawnFloatingText(width / 2, Math.max(100, height * 0.28), `SECTOR ${sectorIdx + 1} · ${palette.name.toUpperCase()}`, '#00f3ff');
   }
@@ -376,26 +410,31 @@ export class MainGame extends Phaser.Scene {
 
     if (this.isGameOver) return;
 
-    const effectiveSpeed = this.player?.overdriveActive
-      ? Math.min(GAME_CONFIG.MAX_SPEED + 180, this.currentSpeed + GAME_CONFIG.OVERDRIVE_SPEED_BONUS)
-      : this.currentSpeed;
+    const prevComboCount = this.combo.count;
+    this.combo = tickComboDecay(this.combo, delta);
+    if (prevComboCount > 0 && this.combo.count === 0) {
+      this.emitRunUpdate();
+    }
 
-    const dtSec = delta / 1000;
-    this.distance += (effectiveSpeed * dtSec) / 14;
-    const newScore = Math.floor(this.distance);
+    const stepResult = stepRunDistance(
+      this.distance,
+      this.currentSpeed,
+      Boolean(this.player?.overdriveActive),
+      delta
+    );
+    this.distance = stepResult.nextDistance;
+    const effectiveSpeed = stepResult.effectiveSpeed;
+    const newScore = stepResult.nextScore;
 
     if (newScore !== this.score) {
       this.score = newScore;
       const step = Math.floor(this.score / GAME_CONFIG.DIFFICULTY_INTERVAL_METERS);
       if (step > this.lastDifficultyStep) {
         this.lastDifficultyStep = step;
-        this.currentSpeed = Math.min(
-          GAME_CONFIG.MAX_SPEED,
-          this.currentSpeed + GAME_CONFIG.SPEED_INCREMENT
-        );
+        this.currentSpeed = computeSpeedForScore(this.score);
       }
 
-      const nextSector = Math.floor(this.score / GAME_CONFIG.SECTOR_INTERVAL_METERS);
+      const nextSector = computeSectorIndex(this.score);
       if (nextSector > this.currentSectorIndex) {
         this.currentSectorIndex = nextSector;
         this.transitionToSector(nextSector);
@@ -476,6 +515,13 @@ export class MainGame extends Phaser.Scene {
     this.emitBuffUpdate();
   }
 
+  private handleLaserCollision = (playerObj: unknown, laserObj: unknown) => {
+    const laser = laserObj as Phaser.Physics.Arcade.Sprite;
+    if (!laser || !laser.active) return;
+    if (laser.getData('laserState') !== 'active') return;
+    this.handleHazardCollision(playerObj, laserObj);
+  };
+
   private handleHazardCollision = (_playerObj: unknown, hazardObj: unknown) => {
     if (this.isGameOver || !this.isStarted || this.isPausedState || !this.player) return;
 
@@ -492,8 +538,12 @@ export class MainGame extends Phaser.Scene {
         this.cameras.main.shake(90, 0.008);
         soundEngine.playOverdriveSmash();
 
-        const mult = getCreditMultiplier(this.progress.upgrades.creditMultiplier);
-        const smashBonus = Math.max(3, Math.round(3 * mult));
+        this.combo = advanceComboOnEvent(this.combo, 1);
+        const smashBonus = computeCreditReward(
+          3,
+          this.progress.upgrades.creditMultiplier,
+          this.combo.multiplier
+        );
         this.runCredits += smashBonus;
         this.spawnFloatingText(hx, hy - 14, `+${smashBonus} SMASH`, '#ffc857');
         this.emitRunUpdate();
@@ -505,6 +555,8 @@ export class MainGame extends Phaser.Scene {
 
     if (this.player.consumeShield(now)) {
       this.cameras.main.shake(180, 0.01);
+      this.combo = resetCombo();
+      this.emitRunUpdate();
       if (hazard && hazard.active) {
         this.pickupEmitter?.explode(18, hazard.x, hazard.y);
         hazard.disableBody(true, true);
@@ -514,6 +566,7 @@ export class MainGame extends Phaser.Scene {
 
     this.cameras.main.shake(280, 0.016);
     this.isGameOver = true;
+    this.windEmitter?.stop();
     this.explosionEmitter?.explode(24, this.player.x, this.player.y);
     this.player.die();
     soundEngine.playGameOver();
@@ -523,9 +576,49 @@ export class MainGame extends Phaser.Scene {
       runCredits: this.runCredits,
       dronesDestroyed: this.dronesDestroyed,
       doubleJumps: this.player.doubleJumpsUsed,
-      fastFalls: this.player.fastFallsUsed,
+      platformsLanded: this.platformsLanded,
       overdrivesTriggered: this.player.overdrivesTriggered,
+      comboCount: this.combo.count,
+      comboMultiplier: this.combo.multiplier,
     });
+  };
+
+  private handlePlatformLand = (_playerObj: unknown, platformObj: unknown) => {
+    if (!this.isStarted || this.isGameOver || !this.player || !this.player.body) return;
+    const platform = platformObj as Phaser.Physics.Arcade.Sprite;
+    if (!platform || !platform.active) return;
+
+    if (
+      (this.player.body.blocked.down || this.player.body.touching.down) &&
+      !platform.getData('landedByRun')
+    ) {
+      platform.setData('landedByRun', true);
+      this.platformsLanded += 1;
+      this.emitRunUpdate();
+    }
+  };
+
+  private handleBoostRingCollect = (_playerObj: unknown, ringObj: unknown) => {
+    const ring = ringObj as Phaser.Physics.Arcade.Sprite;
+    if (!ring || !ring.active || !this.player) return;
+
+    const rx = ring.x;
+    const ry = ring.y;
+    ring.disableBody(true, true);
+
+    this.player.refillJetpack();
+    this.combo = advanceComboOnEvent(this.combo, 2);
+    const earned = computeCreditReward(
+      3,
+      this.progress.upgrades.creditMultiplier,
+      this.combo.multiplier
+    );
+    this.runCredits += earned;
+    this.player.addOverdriveCharge(GAME_CONFIG.OVERDRIVE_CHARGE_PER_RING);
+    this.pickupEmitter?.explode(16, rx, ry);
+    soundEngine.playRingBoost();
+    this.spawnFloatingText(rx, ry - 14, `+FUEL +${earned}`, '#00ff9d');
+    this.emitRunUpdate();
   };
 
   private handleCoinCollect = (_playerObj: unknown, coinObj: unknown) => {
@@ -536,8 +629,12 @@ export class MainGame extends Phaser.Scene {
     const cy = coin.y;
     coin.disableBody(true, true);
 
-    const mult = getCreditMultiplier(this.progress.upgrades.creditMultiplier);
-    const earned = Math.max(1, Math.round(1 * mult));
+    this.combo = advanceComboOnEvent(this.combo, 1);
+    const earned = computeCreditReward(
+      1,
+      this.progress.upgrades.creditMultiplier,
+      this.combo.multiplier
+    );
     this.runCredits += earned;
 
     this.player?.addOverdriveCharge(GAME_CONFIG.OVERDRIVE_CHARGE_PER_COIN);
@@ -583,14 +680,38 @@ export class MainGame extends Phaser.Scene {
     const dx = drone.x;
     const dy = drone.y;
     bullet.disableBody(true, true);
+
+    const currentHp = (drone.getData('hp') as number) || 1;
+    const hit = resolveDroneBulletHit(currentHp);
+    drone.setData('hp', hit.nextHp);
+
+    if (!hit.destroyed) {
+      if (hit.armorBroken) {
+        drone.setTint(0xff6b8b);
+        drone.play('anim_drone', true);
+      }
+      this.sparkEmitter?.explode(10, dx, dy);
+      soundEngine.playArmorCrack();
+      return;
+    }
+
+    const wasArmored = Boolean(drone.getData('armored'));
     drone.disableBody(true, true);
 
-    const mult = getCreditMultiplier(this.progress.upgrades.creditMultiplier);
-    const earned = Math.max(2, Math.round(2 * mult));
+    this.combo = advanceComboOnEvent(this.combo, wasArmored ? 2 : 1);
+    const earned = computeCreditReward(
+      wasArmored ? 4 : 2,
+      this.progress.upgrades.creditMultiplier,
+      this.combo.multiplier
+    );
     this.runCredits += earned;
     this.dronesDestroyed += 1;
 
-    this.player?.addOverdriveCharge(GAME_CONFIG.OVERDRIVE_CHARGE_PER_DRONE);
+    this.player?.addOverdriveCharge(
+      wasArmored
+        ? GAME_CONFIG.OVERDRIVE_CHARGE_PER_ARMORED_DRONE
+        : GAME_CONFIG.OVERDRIVE_CHARGE_PER_DRONE
+    );
     this.explosionEmitter?.explode(18, dx, dy);
     this.cameras.main.shake(90, 0.005);
     soundEngine.playExplosion();
@@ -630,8 +751,10 @@ export class MainGame extends Phaser.Scene {
       sectorNumber: this.currentSectorIndex + 1,
       sectorName: sector.name,
       doubleJumps: this.player?.doubleJumpsUsed ?? 0,
-      fastFalls: this.player?.fastFallsUsed ?? 0,
+      platformsLanded: this.platformsLanded,
       overdrivesTriggered: this.player?.overdrivesTriggered ?? 0,
+      comboCount: this.combo.count,
+      comboMultiplier: this.combo.multiplier,
     });
   }
 
@@ -654,12 +777,15 @@ export class MainGame extends Phaser.Scene {
     this.distance = 0;
     this.runCredits = 0;
     this.dronesDestroyed = 0;
+    this.platformsLanded = 0;
+    this.combo = resetCombo();
     this.lastDifficultyStep = 0;
     this.currentSectorIndex = 0;
     this.currentSpeed = GAME_CONFIG.BASE_SPEED;
     this.isGameOver = false;
     this.isStarted = false;
     this.isPausedState = false;
+    this.windEmitter?.stop();
     this.applySectorPaletteImmediate(0);
   }
 

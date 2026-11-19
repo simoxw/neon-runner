@@ -48,7 +48,7 @@ interface RunMetricSnapshot {
   drones: number;
   credits: number;
   doubleJumps: number;
-  fastFalls: number;
+  platforms: number;
   overdrive: number;
 }
 
@@ -57,7 +57,7 @@ const ZERO_METRICS: RunMetricSnapshot = {
   drones: 0,
   credits: 0,
   doubleJumps: 0,
-  fastFalls: 0,
+  platforms: 0,
   overdrive: 0,
 };
 
@@ -77,6 +77,8 @@ const App: React.FC = () => {
   const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
   const [sectorNumber, setSectorNumber] = useState(1);
   const [sectorName, setSectorName] = useState(SECTORS_PALETTE[0].name);
+  const [comboCount, setComboCount] = useState(0);
+  const [comboMultiplier, setComboMultiplier] = useState(1);
   const [buffs, setBuffs] = useState<ActiveBuffs>(EMPTY_BUFFS);
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [missionToast, setMissionToast] = useState<MissionToastData | null>(null);
@@ -116,7 +118,7 @@ const App: React.FC = () => {
         drones: snapshot.drones ?? prevMetrics.drones,
         credits: snapshot.credits ?? prevMetrics.credits,
         doubleJumps: snapshot.doubleJumps ?? prevMetrics.doubleJumps,
-        fastFalls: snapshot.fastFalls ?? prevMetrics.fastFalls,
+        platforms: snapshot.platforms ?? prevMetrics.platforms,
         overdrive: snapshot.overdrive ?? prevMetrics.overdrive,
       };
 
@@ -125,7 +127,7 @@ const App: React.FC = () => {
         drones: Math.max(0, nextMetrics.drones - prevMetrics.drones),
         credits: Math.max(0, nextMetrics.credits - prevMetrics.credits),
         doubleJumps: Math.max(0, nextMetrics.doubleJumps - prevMetrics.doubleJumps),
-        fastFalls: Math.max(0, nextMetrics.fastFalls - prevMetrics.fastFalls),
+        platforms: Math.max(0, nextMetrics.platforms - prevMetrics.platforms),
         overdrive: Math.max(0, nextMetrics.overdrive - prevMetrics.overdrive),
       };
 
@@ -210,6 +212,8 @@ const App: React.FC = () => {
           setSectorName(
             typeof data?.sectorName === 'string' ? data.sectorName : SECTORS_PALETTE[0].name
           );
+          setComboCount(0);
+          setComboMultiplier(1);
           setIsNewRecord(false);
           setBuffs(EMPTY_BUFFS);
           break;
@@ -221,7 +225,8 @@ const App: React.FC = () => {
             typeof data?.dronesDestroyed === 'number' ? data.dronesDestroyed : undefined;
           const nextDoubleJumps =
             typeof data?.doubleJumps === 'number' ? data.doubleJumps : undefined;
-          const nextFastFalls = typeof data?.fastFalls === 'number' ? data.fastFalls : undefined;
+          const nextPlatforms =
+            typeof data?.platformsLanded === 'number' ? data.platformsLanded : undefined;
           const nextOverdrives =
             typeof data?.overdrivesTriggered === 'number' ? data.overdrivesTriggered : undefined;
 
@@ -231,6 +236,8 @@ const App: React.FC = () => {
           if (typeof data?.speedMultiplier === 'number') setSpeedMultiplier(data.speedMultiplier);
           if (typeof data?.sectorNumber === 'number') setSectorNumber(data.sectorNumber);
           if (typeof data?.sectorName === 'string') setSectorName(data.sectorName);
+          if (typeof data?.comboCount === 'number') setComboCount(data.comboCount);
+          if (typeof data?.comboMultiplier === 'number') setComboMultiplier(data.comboMultiplier);
 
           applyMissionDeltas(
             {
@@ -238,7 +245,7 @@ const App: React.FC = () => {
               credits: nextCredits,
               drones: nextDrones,
               doubleJumps: nextDoubleJumps,
-              fastFalls: nextFastFalls,
+              platforms: nextPlatforms,
               overdrive: nextOverdrives,
             },
             false
@@ -276,13 +283,16 @@ const App: React.FC = () => {
           const earnedCredits = typeof data?.runCredits === 'number' ? data.runCredits : 0;
           const finalDrones = typeof data?.dronesDestroyed === 'number' ? data.dronesDestroyed : 0;
           const finalDoubleJumps = typeof data?.doubleJumps === 'number' ? data.doubleJumps : 0;
-          const finalFastFalls = typeof data?.fastFalls === 'number' ? data.fastFalls : 0;
+          const finalPlatforms =
+            typeof data?.platformsLanded === 'number' ? data.platformsLanded : 0;
           const finalOverdrives =
             typeof data?.overdrivesTriggered === 'number' ? data.overdrivesTriggered : 0;
 
           setScore(finalScore);
           setRunCredits(earnedCredits);
           setDronesDestroyed(finalDrones);
+          setComboCount(0);
+          setComboMultiplier(1);
           setBuffs(EMPTY_BUFFS);
           setGameState(GameState.GAME_OVER);
 
@@ -292,7 +302,7 @@ const App: React.FC = () => {
               credits: earnedCredits,
               drones: finalDrones,
               doubleJumps: finalDoubleJumps,
-              fastFalls: finalFastFalls,
+              platforms: finalPlatforms,
               overdrive: finalOverdrives,
             },
             false
@@ -433,6 +443,8 @@ const App: React.FC = () => {
           speedMultiplier={speedMultiplier}
           sectorNumber={sectorNumber}
           sectorName={sectorName}
+          comboCount={comboCount}
+          comboMultiplier={comboMultiplier}
           buffs={buffs}
           missionToast={missionToast}
           muted={progress.muted}

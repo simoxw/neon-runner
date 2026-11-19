@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Coins, Magnet, Palette, Shield, Sparkles, X, Zap } from 'lucide-react';
+import { Check, Coins, Magnet, Palette, Rocket, Shield, Sparkles, X, Zap } from 'lucide-react';
 import { getUpgradeCost, SKINS_CATALOG, UPGRADES_CATALOG } from '../constants';
 import { PlayerProgress, SkinId, UpgradeId } from '../types';
 
@@ -14,6 +14,7 @@ const UPGRADE_ICONS: Record<UpgradeId, React.ReactNode> = {
   shieldDuration: <Shield className="h-5 w-5 text-cyan-400" />,
   magnetDuration: <Magnet className="h-5 w-5 text-amber-400" />,
   blasterRate: <Zap className="h-5 w-5 text-rose-400" />,
+  jetpackThruster: <Rocket className="h-5 w-5 text-sky-400" />,
   creditMultiplier: <Coins className="h-5 w-5 text-emerald-400" />,
 };
 

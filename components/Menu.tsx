@@ -199,11 +199,9 @@ const Menu: React.FC<MenuProps> = ({
 
       <div className="w-full max-w-xl border-t border-white/10 pt-2.5 text-center text-xs text-slate-400 [@media(max-height:500px)]:pt-1.5">
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-          <span>Tap / Space: Jump &amp; Double Jump</span>
+          <span>Tap / Space / ↑: Jump &amp; Double Jump</span>
           <span aria-hidden="true" className="text-slate-600">·</span>
-          <span>Hold: Glide</span>
-          <span aria-hidden="true" className="text-slate-600">·</span>
-          <span>Swipe Down / ↓: Fast-Fall</span>
+          <span>Hold in Air: Jetpack Boost</span>
         </div>
       </div>
     </div>

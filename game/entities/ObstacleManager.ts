@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG, getGroundHeight } from '../../constants';
+import { advanceLaserState, LaserPhase } from '../../utils/gameRules';
 import { soundEngine } from '../../utils/sound';
 import { Player } from './Player';
 
@@ -13,9 +14,11 @@ interface ActiveMissileWarning {
 export class ObstacleManager {
   public scene: Phaser.Scene;
   public barriers: Phaser.Physics.Arcade.Group;
+  public lasers: Phaser.Physics.Arcade.Group;
   public drones: Phaser.Physics.Arcade.Group;
   public missiles: Phaser.Physics.Arcade.Group;
   public platforms: Phaser.Physics.Arcade.Group;
+  public boostRings: Phaser.Physics.Arcade.Group;
   public coins: Phaser.Physics.Arcade.Group;
   public powerups: Phaser.Physics.Arcade.Group;
 
@@ -33,6 +36,11 @@ export class ObstacleManager {
       maxSize: GAME_CONFIG.POOL_SIZE,
     });
 
+    this.lasers = scene.physics.add.group({
+      defaultKey: 'laser_gate_warn',
+      maxSize: 6,
+    });
+
     this.drones = scene.physics.add.group({
       defaultKey: 'drone_0',
       maxSize: 12,
@@ -45,6 +53,11 @@ export class ObstacleManager {
 
     this.platforms = scene.physics.add.group({
       defaultKey: 'sky_platform',
+      maxSize: 8,
+    });
+
+    this.boostRings = scene.physics.add.group({
+      defaultKey: 'boost_ring',
       maxSize: 6,
     });
 
@@ -74,7 +87,7 @@ export class ObstacleManager {
     this.distanceSinceMissile += dx;
 
     if (this.distanceUntilNextPattern <= 0) {
-      const patternWidth = this.spawnPattern(speed);
+      const patternWidth = this.spawnPattern(speed, scoreMeters);
       const minSafeGap = Math.max(290, speed * 0.66);
       const maxGap = Math.max(430, speed * 0.96);
       this.distanceUntilNextPattern = patternWidth + Phaser.Math.Between(minSafeGap, maxGap);
@@ -93,9 +106,11 @@ export class ObstacleManager {
 
     this.updateMissileWarnings(delta, speed, player);
 
-    // Move barriers and sky platforms
+    // Move barriers, laser gates, boost rings, and sky platforms
     this.updateGroupMovement(this.barriers, speed, -120);
     this.updateGroupMovement(this.platforms, speed, -180);
+    this.updateGroupMovement(this.boostRings, speed, -120);
+    this.updateLasers(time, delta, speed);
 
     // Move missiles at configured 1.2x scroll speed
     const missileChildren = this.missiles.getChildren();
@@ -268,7 +283,38 @@ export class ObstacleManager {
     }
   }
 
-  private spawnPattern(speed: number): number {
+  private updateLasers(time: number, delta: number, speed: number) {
+    const children = this.lasers.getChildren();
+    for (let i = 0; i < children.length; i++) {
+      const laser = children[i] as Phaser.Physics.Arcade.Sprite;
+      if (laser && laser.active) {
+        laser.setVelocityX(-speed);
+        const prevPhase = (laser.getData('laserState') as LaserPhase) || 'warning';
+        const prevElapsed = (laser.getData('laserElapsedMs') as number) || 0;
+        const next = advanceLaserState({ phase: prevPhase, elapsedMs: prevElapsed }, delta);
+        laser.setData('laserState', next.phase);
+        laser.setData('laserElapsedMs', next.elapsedMs);
+
+        if (next.phase === 'warning') {
+          if (laser.texture.key !== 'laser_gate_warn') {
+            laser.setTexture('laser_gate_warn');
+          }
+          laser.setAlpha(Math.floor(time / 70) % 2 === 0 ? 0.85 : 0.4);
+        } else {
+          if (laser.texture.key !== 'laser_gate_active') {
+            laser.setTexture('laser_gate_active');
+          }
+          laser.setAlpha(0.92 + Math.sin(time * 0.03) * 0.08);
+        }
+
+        if (laser.x < -100) {
+          laser.disableBody(true, true);
+        }
+      }
+    }
+  }
+
+  private spawnPattern(speed: number, scoreMeters: number): number {
     const { width, height } = this.scene.scale;
     const gh = getGroundHeight(height);
     const groundTop = height - gh;
@@ -294,9 +340,10 @@ export class ObstacleManager {
       return 220;
     }
 
+    const sector2Unlocked = scoreMeters >= GAME_CONFIG.SECTOR_INTERVAL_METERS;
     const roll = Phaser.Math.Between(0, 99);
 
-    if (roll < 22) {
+    if (roll < 15) {
       // Pattern 1: Single low barrier + rewarding coin arc overhead
       this.spawnBarrier(startX, groundTop, false, speed);
       this.spawnCoinArc(
@@ -307,8 +354,8 @@ export class ObstacleManager {
         safeTopY
       );
       return 120;
-    } else if (roll < 42) {
-      // Pattern 2: Tall barrier (encourages holding jump or double jump) + glide coin trail
+    } else if (roll < 30) {
+      // Pattern 2: Tall barrier (encourages holding jump or double jump) + coin trail
       this.spawnBarrier(startX, groundTop, true, speed);
       this.spawnCoinArc(
         startX + 55,
@@ -318,48 +365,94 @@ export class ObstacleManager {
         safeTopY
       );
       return 190;
-    } else if (roll < 64) {
-      // Pattern 3: Destructible Cyber Drone(s) + coins behind
+    } else if (roll < 48) {
+      // Pattern 3: Destructible Cyber Drone(s) — includes Armored Drones in Sector 2+
       const droneCount = speed > 560 ? 2 : 1;
       const minDroneY = safeTopY + 14;
       const maxDroneY = Math.max(minDroneY + 10, groundTop - 75);
       for (let i = 0; i < droneCount; i++) {
         const dy = Phaser.Math.Between(minDroneY, maxDroneY);
-        this.spawnDrone(startX + i * 165, dy, speed);
+        const armored = sector2Unlocked && (i === 1 || Phaser.Math.Between(0, 99) < 42);
+        this.spawnDrone(startX + i * 175, dy, speed, armored);
       }
       this.spawnCoinLine(startX + 30, clampY(groundTop - 44), 3, speed);
-      return droneCount === 2 ? 220 : 120;
-    } else if (roll < 78) {
+      return droneCount === 2 ? 230 : 130;
+    } else if (roll < 60) {
       // Pattern 4: Low barrier followed by hovering drone
       this.spawnBarrier(startX, groundTop, false, speed);
       const spacing = Math.max(250, speed * 0.52);
       const droneY = clampY(groundTop - Math.min(130, usableHeight * 0.6));
-      this.spawnDrone(startX + spacing, droneY, speed);
+      this.spawnDrone(startX + spacing, droneY, speed, sector2Unlocked && Phaser.Math.Between(0, 1) === 1);
       this.spawnCoinArc(startX + spacing * 0.45, droneY, 3, speed, safeTopY);
       return spacing + 80;
-    } else if (roll < 94) {
-      // Pattern 5: Elevated One-Way Sky Platform with bonus coins on top
-      const platLift = Math.min(134, Math.max(94, usableHeight * 0.54));
-      const platformY = clampY(groundTop - platLift);
-      const platCenterX = startX + 80;
-      this.spawnPlatform(platCenterX, platformY, speed);
-      this.spawnCoinLine(platCenterX - 64, Math.max(safeTopY, platformY - 30), 4, speed);
+    } else if (roll < 74) {
+      // Pattern 5: Multi-Level Sky Platform Staircase + Aerial Boost Ring
+      const midLift = Math.min(115, Math.max(82, usableHeight * 0.44));
+      const highLift = Math.min(usableHeight - 28, Math.max(midLift + 54, usableHeight * 0.74));
+      const midY = clampY(groundTop - midLift);
+      const highY = clampY(groundTop - highLift);
 
-      // Half of the time, place a low ground barrier underneath so jumping up is tactical
+      const firstX = startX + 75;
+      const secondX = firstX + 260;
+
+      this.spawnPlatform(firstX, midY, speed);
+      this.spawnCoinLine(firstX - 44, Math.max(safeTopY, midY - 28), 3, speed);
+
+      this.spawnPlatform(secondX, highY, speed);
+      this.spawnCoinLine(secondX - 64, Math.max(safeTopY, highY - 28), 4, speed);
+      this.spawnBoostRing(firstX + 130, Math.max(safeTopY + 12, (midY + highY) / 2 - 22), speed);
+
+      // Lower-route challenge: barrier under first platform or drone under second
       if (Phaser.Math.Between(0, 1) === 1) {
-        this.spawnBarrier(platCenterX, groundTop, false, speed);
+        this.spawnBarrier(firstX, groundTop, false, speed);
+      } else {
+        this.spawnDrone(secondX, clampY(groundTop - 52), speed, false);
       }
-      return 230;
+
+      return 430;
+    } else if (roll < 86) {
+      // Pattern 6: Dual-Path Sky Rail Gauntlet (Upper high-speed coins vs Lower barriers)
+      const railLift = Math.min(132, Math.max(90, usableHeight * 0.52));
+      const railY = clampY(groundTop - railLift);
+
+      const p1X = startX + 80;
+      const p2X = p1X + 245;
+
+      this.spawnPlatform(p1X, railY, speed);
+      this.spawnPlatform(p2X, railY - 14, speed);
+      this.spawnCoinLine(p1X - 44, Math.max(safeTopY, railY - 28), 3, speed);
+      this.spawnCoinArc(p2X - 44, Math.max(safeTopY + 12, railY - 46), 4, speed, safeTopY);
+
+      this.spawnBarrier(p1X - 10, groundTop, false, speed);
+      this.spawnBarrier(p2X + 10, groundTop, false, speed);
+
+      return 450;
+    } else if (roll < 95 && sector2Unlocked) {
+      // Pattern 7 (Sector 2+): Intermittent Laser Gate + Elevated Safe Sky Bypass + Boost Ring
+      const gateY = groundTop - 66;
+      const bypassLift = Math.min(usableHeight - 24, Math.max(122, usableHeight * 0.62));
+      const bypassY = clampY(groundTop - bypassLift);
+
+      this.spawnPlatform(startX + 40, bypassY, speed);
+      this.spawnCoinLine(startX - 4, Math.max(safeTopY, bypassY - 28), 3, speed);
+      this.spawnLaserGate(startX + 240, gateY, speed);
+      this.spawnBoostRing(startX + 240, Math.max(safeTopY + 16, bypassY - 36), speed);
+
+      return 340;
     } else {
-      // Pattern 6: Safe coin streak
+      // Pattern 8: Safe coin streak + occasional high Boost Ring
       this.spawnCoinLine(startX, clampY(groundTop - 48), 5, speed);
-      return 180;
+      if (Phaser.Math.Between(0, 1) === 1) {
+        this.spawnBoostRing(startX + 85, clampY(groundTop - Math.min(148, usableHeight * 0.68)), speed);
+      }
+      return 190;
     }
   }
 
   private spawnPlatform(x: number, y: number, speed: number) {
     const platform = this.platforms.get(x, y, 'sky_platform') as Phaser.Physics.Arcade.Sprite | null;
     if (platform) {
+      platform.setData('landedByRun', false);
       platform.enableBody(true, x, y, true, true);
       if (platform.body) {
         const body = platform.body as Phaser.Physics.Arcade.Body;
@@ -396,20 +489,56 @@ export class ObstacleManager {
     }
   }
 
-  private spawnDrone(x: number, y: number, speed: number) {
-    const drone = this.drones.get(x, y, 'drone_0') as Phaser.Physics.Arcade.Sprite | null;
+  private spawnLaserGate(x: number, y: number, speed: number) {
+    const laser = this.lasers.get(x, y, 'laser_gate_warn') as Phaser.Physics.Arcade.Sprite | null;
+    if (laser) {
+      laser.setTexture('laser_gate_warn');
+      laser.setData('laserState', 'warning');
+      laser.setData('laserElapsedMs', Phaser.Math.Between(0, 350));
+      laser.enableBody(true, x, y, true, true);
+      if (laser.body) {
+        const body = laser.body as Phaser.Physics.Arcade.Body;
+        body.setAllowGravity(false);
+        body.immovable = true;
+        body.setSize(12, 112);
+        body.setOffset(10, 10);
+        laser.setVelocityX(-speed);
+      }
+    }
+  }
+
+  private spawnBoostRing(x: number, y: number, speed: number) {
+    const ring = this.boostRings.get(x, y, 'boost_ring') as Phaser.Physics.Arcade.Sprite | null;
+    if (ring) {
+      ring.enableBody(true, x, y, true, true);
+      if (ring.body) {
+        const body = ring.body as Phaser.Physics.Arcade.Body;
+        body.setAllowGravity(false);
+        body.setSize(28, 52);
+        body.setOffset(4, 5);
+        ring.setVelocityX(-speed);
+      }
+    }
+  }
+
+  private spawnDrone(x: number, y: number, speed: number, armored: boolean = false) {
+    const initialKey = armored ? 'drone_armored_0' : 'drone_0';
+    const drone = this.drones.get(x, y, initialKey) as Phaser.Physics.Arcade.Sprite | null;
     if (drone) {
+      drone.clearTint();
       drone.enableBody(true, x, y, true, true);
       drone.setData('baseY', y);
       drone.setData('phase', Phaser.Math.FloatBetween(0, Math.PI * 2));
-      drone.play('anim_drone', true);
+      drone.setData('hp', armored ? 2 : 1);
+      drone.setData('armored', armored);
+      drone.play(armored ? 'anim_drone_armored' : 'anim_drone', true);
       if (drone.body) {
         const body = drone.body as Phaser.Physics.Arcade.Body;
         body.setAllowGravity(false);
         body.immovable = true;
-        body.setSize(34, 26);
+        body.setSize(armored ? 38 : 34, armored ? 30 : 26);
         body.setOffset(7, 7);
-        drone.setVelocityX(-speed * 1.12);
+        drone.setVelocityX(-speed * (armored ? 1.06 : 1.12));
       }
     }
   }
@@ -477,9 +606,11 @@ export class ObstacleManager {
     };
 
     deactivateAll(this.barriers);
+    deactivateAll(this.lasers);
     deactivateAll(this.drones);
     deactivateAll(this.missiles);
     deactivateAll(this.platforms);
+    deactivateAll(this.boostRings);
     deactivateAll(this.coins);
     deactivateAll(this.powerups);
 

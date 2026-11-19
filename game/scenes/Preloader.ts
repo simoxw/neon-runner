@@ -38,6 +38,15 @@ export class Preloader extends Phaser.Scene {
       });
     }
 
+    if (!this.anims.exists('anim_drone_armored')) {
+      this.anims.create({
+        key: 'anim_drone_armored',
+        frames: [{ key: 'drone_armored_0' }, { key: 'drone_armored_1' }],
+        frameRate: 7,
+        repeat: -1,
+      });
+    }
+
     if (!this.anims.exists('anim_coin')) {
       this.anims.create({
         key: 'anim_coin',
@@ -73,6 +82,7 @@ export class Preloader extends Phaser.Scene {
     this.createCoinFrames();
     this.createPowerupTextures();
     this.createMissileTextures();
+    this.createLaserAndRingTextures();
     this.createParticleAndBulletTextures();
   }
 
@@ -429,6 +439,40 @@ export class Preloader extends Phaser.Scene {
       ctx.fillRect(18, frame === 0 ? 34 : 33, 14, 3);
       canvas.refresh();
     });
+
+    [0, 1].forEach((frame) => {
+      const key = `drone_armored_${frame}`;
+      if (this.textures.exists(key)) return;
+      const canvas = this.textures.createCanvas(key, 54, 46);
+      if (!canvas) return;
+      const ctx = canvas.context;
+
+      // Reinforced outer armor shell
+      ctx.fillStyle = '#191335';
+      ctx.beginPath();
+      ctx.moveTo(6, 23);
+      ctx.lineTo(18, 7);
+      ctx.lineTo(39, 7);
+      ctx.lineTo(49, 23);
+      ctx.lineTo(39, 39);
+      ctx.lineTo(18, 39);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#00f3ff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Golden armor plate stripe & pulsing core
+      ctx.fillStyle = '#ffc857';
+      ctx.fillRect(18, 11, 18, 4);
+      ctx.fillRect(18, 31, 18, 4);
+
+      ctx.fillStyle = frame === 0 ? '#00f3ff' : '#ff2a6d';
+      ctx.beginPath();
+      ctx.arc(27, 23, frame === 0 ? 7 : 5, 0, Math.PI * 2);
+      ctx.fill();
+      canvas.refresh();
+    });
   }
 
   private createCoinFrames() {
@@ -568,6 +612,88 @@ export class Preloader extends Phaser.Scene {
         ctx.fillStyle = '#ffc857';
         ctx.fillRect(17, 12, 4, 12);
         ctx.fillRect(17, 26, 4, 4);
+        canvas.refresh();
+      }
+    }
+  }
+
+  private createLaserAndRingTextures() {
+    if (!this.textures.exists('laser_gate_warn')) {
+      const canvas = this.textures.createCanvas('laser_gate_warn', 32, 132);
+      if (canvas) {
+        const ctx = canvas.context;
+        // Top & bottom emitter pods
+        ctx.fillStyle = '#20132d';
+        ctx.fillRect(4, 0, 24, 14);
+        ctx.fillRect(4, 118, 24, 14);
+        ctx.fillStyle = '#ffc857';
+        ctx.fillRect(8, 12, 16, 4);
+        ctx.fillRect(8, 116, 16, 4);
+
+        // Thin warning laser line
+        ctx.fillStyle = 'rgba(255, 42, 109, 0.55)';
+        ctx.fillRect(15, 16, 2, 100);
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('laser_gate_active')) {
+      const canvas = this.textures.createCanvas('laser_gate_active', 32, 132);
+      if (canvas) {
+        const ctx = canvas.context;
+        ctx.fillStyle = '#2a0b24';
+        ctx.fillRect(4, 0, 24, 14);
+        ctx.fillRect(4, 118, 24, 14);
+        ctx.fillStyle = '#ff2a6d';
+        ctx.fillRect(8, 12, 16, 4);
+        ctx.fillRect(8, 116, 16, 4);
+
+        // Outer plasma glow + bright core
+        ctx.fillStyle = 'rgba(255, 42, 109, 0.45)';
+        ctx.fillRect(8, 16, 16, 100);
+        ctx.fillStyle = '#ff2a6d';
+        ctx.fillRect(11, 16, 10, 100);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(14, 16, 4, 100);
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('boost_ring')) {
+      const canvas = this.textures.createCanvas('boost_ring', 36, 62);
+      if (canvas) {
+        const ctx = canvas.context;
+        ctx.strokeStyle = 'rgba(0, 243, 255, 0.32)';
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.ellipse(18, 31, 12, 24, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#00ff9d';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(18, 31, 12, 24, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(18, 31, 8, 18, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('wind_streak')) {
+      const canvas = this.textures.createCanvas('wind_streak', 48, 3);
+      if (canvas) {
+        const ctx = canvas.context;
+        const grad = ctx.createLinearGradient(0, 0, 48, 0);
+        grad.addColorStop(0, 'rgba(0, 243, 255, 0)');
+        grad.addColorStop(0.5, 'rgba(0, 243, 255, 0.55)');
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 48, 3);
         canvas.refresh();
       }
     }

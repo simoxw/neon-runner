@@ -13,14 +13,15 @@ export type UpgradeId =
   | 'shieldDuration'
   | 'magnetDuration'
   | 'blasterRate'
-  | 'creditMultiplier';
+  | 'creditMultiplier'
+  | 'jetpackThruster';
 
 export type MissionType =
   | 'distance'
   | 'drones'
   | 'credits'
   | 'doubleJumps'
-  | 'fastFalls'
+  | 'platforms'
   | 'overdrive';
 
 export interface ActiveMission {
@@ -64,6 +65,8 @@ export interface RunTelemetry {
   sectorNumber: number;
   sectorName: string;
   doubleJumps: number;
-  fastFalls: number;
+  platformsLanded: number;
   overdrivesTriggered: number;
+  comboCount: number;
+  comboMultiplier: number;
 }

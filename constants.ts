@@ -2,15 +2,19 @@ import { ActiveMission, MissionType, SkinId, UpgradeId } from './types';
 
 export const GAME_CONFIG = {
   GRAVITY: 1550,
-  PLAYER_JUMP_INITIAL: -460,
+  PLAYER_JUMP_INITIAL: -475,
   PLAYER_JUMP_HOLD_ACCEL: -1450,
-  DOUBLE_JUMP_VELOCITY: -490,
-  FAST_FALL_VELOCITY: 860,
+  DOUBLE_JUMP_VELOCITY: -510,
+  JETPACK_MAX_FUEL_MS: 950,
+  JETPACK_FUEL_PER_LEVEL_MS: 200,
+  JETPACK_THRUST_ACCEL: -1950,
+  JETPACK_MAX_RISE_SPEED: -190,
+  JETPACK_RISE_PER_LEVEL: 22,
   MAX_JUMP_HOLD_MS: 240,
   PLAYER_JUMP_CUT_MULTIPLIER: 0.52,
   COYOTE_TIME_MS: 95,
   JUMP_BUFFER_MS: 110,
-  GLIDE_MAX_FALL_SPEED: 125,
+  GLIDE_MAX_FALL_SPEED: 135,
   BASE_SPEED: 420,
   MAX_SPEED: 940,
   SPEED_INCREMENT: 24,
@@ -23,8 +27,16 @@ export const GAME_CONFIG = {
   OVERDRIVE_SPEED_BONUS: 240,
   OVERDRIVE_CHARGE_PER_COIN: 2,
   OVERDRIVE_CHARGE_PER_DRONE: 6,
+  OVERDRIVE_CHARGE_PER_ARMORED_DRONE: 10,
+  OVERDRIVE_CHARGE_PER_RING: 8,
   MISSILE_SPEED_MULTIPLIER: 1.2,
   SECTOR_INTERVAL_METERS: 300,
+  LASER_WARN_MS: 950,
+  LASER_ACTIVE_MS: 1150,
+  COMBO_DECAY_MS: 2800,
+  COMBO_TIER_2_THRESHOLD: 6,
+  COMBO_TIER_3_THRESHOLD: 14,
+  DUAL_PULSE_MIN_LEVEL: 3,
 };
 
 export function getGroundHeight(viewportHeight: number): number {
@@ -171,10 +183,10 @@ const MISSION_TEMPLATES: MissionTemplate[] = [
     formatLabel: (target) => `Perform ${target} Double Jumps`,
   },
   {
-    type: 'fastFalls',
-    targets: [6, 12, 18, 26],
+    type: 'platforms',
+    targets: [6, 12, 20, 30],
     rewards: [25, 35, 50, 65],
-    formatLabel: (target) => `Execute ${target} Fast-Falls`,
+    formatLabel: (target) => `Land on ${target} Sky Platforms`,
   },
   {
     type: 'overdrive',
@@ -242,12 +254,26 @@ export const UPGRADES_CATALOG: UpgradeConfig[] = [
   {
     id: 'blasterRate',
     name: 'Pulse Blaster',
-    description: 'Speeds up automatic anti-drone fire rate.',
+    description: 'Faster fire rate; unlocks Dual Pulse at Lv 3+.',
     maxLevel: 5,
     baseCost: 30,
     costStep: 30,
     unit: 'ms',
-    formatValue: (lvl: number) => `${720 - lvl * 75}ms`,
+    formatValue: (lvl: number) =>
+      lvl >= GAME_CONFIG.DUAL_PULSE_MIN_LEVEL
+        ? `${getBlasterCooldownMs(lvl)}ms · Dual`
+        : `${getBlasterCooldownMs(lvl)}ms`,
+  },
+  {
+    id: 'jetpackThruster',
+    name: 'Jetpack Thruster',
+    description: 'Expands mid-air fuel tank and boost climb speed.',
+    maxLevel: 5,
+    baseCost: 30,
+    costStep: 30,
+    unit: 'ms',
+    formatValue: (lvl: number) =>
+      `${(getJetpackMaxFuelMs(lvl) / 1000).toFixed(2)}s`,
   },
   {
     id: 'creditMultiplier',
@@ -279,6 +305,20 @@ export function getMagnetRadiusPx(level: number): number {
 
 export function getBlasterCooldownMs(level: number): number {
   return Math.max(320, 720 - level * 75);
+}
+
+export function isDualPulseBlaster(level: number): boolean {
+  return level >= GAME_CONFIG.DUAL_PULSE_MIN_LEVEL;
+}
+
+export function getJetpackMaxFuelMs(level: number): number {
+  const clamped = Math.max(0, Math.min(5, level));
+  return GAME_CONFIG.JETPACK_MAX_FUEL_MS + clamped * GAME_CONFIG.JETPACK_FUEL_PER_LEVEL_MS;
+}
+
+export function getJetpackMaxRiseSpeed(level: number): number {
+  const clamped = Math.max(0, Math.min(5, level));
+  return GAME_CONFIG.JETPACK_MAX_RISE_SPEED - clamped * GAME_CONFIG.JETPACK_RISE_PER_LEVEL;
 }
 
 export function getCreditMultiplier(level: number): number {

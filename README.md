@@ -6,27 +6,26 @@ Endless runner cyberpunk ad alta velocità sviluppato con **Phaser 3**, **React 
 
 ## Caratteristiche Principali
 
-- **Salto Variabile, Doppio Salto, Planata & Fast-Fall**:
-  - **Tap breve** (touch, click o `Spazio` / `Freccia Su`): salto rapido e basso per superare singole barriere.
-  - **Doppio Salto**: premendo una seconda volta a mezz'aria si attiva un boost propulsivo con scia di particelle.
-  - **Pressione prolungata & Planata (Glide)**: tenendo premuto in salita si raggiunge la quota massima; continuando in discesa si attivano i propulsori per planare.
-  - **Picchiata rapida (Fast-Fall)**: scorrendo verso il basso su mobile (`swipe down`) o premendo `↓` / `S` si interrompe il volo scendendo rapidamente a terra.
+- **Salto Variabile, Doppio Salto & Jetpack Boost**:
+  - **Tap breve** (touch, click o `Spazio` / `↑`): salto rapido e reattivo con animazione elastica (*squash-and-stretch*) e scia luminosa.
+  - **Doppio Salto**: premendo una seconda volta in volo si attiva un secondo stacco propulsivo verso le piattaforme alte.
+  - **Jetpack Boost (Tieni premuto in volo)**: tenendo premuto in aria si attiva la spinta controllata del Jetpack (con riserva aerea che si ricarica istantaneamente toccando terra o qualsiasi piattaforma).
   - **Coyote Time & Jump Buffering**: tolleranza all'uscita dalle piattaforme e pre-caricamento del salto prima dell'atterraggio.
-- **Piattaforme Aeree, Ostacoli, Cyber Drones & Missili**:
-  - **Piattaforme Aeree One-Way**: passerelle neon sopraelevate attraversabili saltando dal basso, con scie di crediti bonus in cima.
+- **Catene di Piattaforme Multi-Livello, Ostacoli, Droni & Missili**:
+  - **Catene di Piattaforme Aeree One-Way**: passerelle neon su due quote (percorso medio e percorso alto) con scie di crediti bonus e doppi percorsi rischio/ricompensa.
   - **Barriere laser** (basse e alte) indistruttibili da evitare o scavalcare.
   - **Cyber Drones** volanti abbattuti dal blaster automatico rilasciando esplosioni e **crediti bonus**.
-  - **Missili in arrivo** con segnalatore di pericolo sul bordo destro (`tracking` -> `lock-on` -> lancio ad alta velocità).
+  - **Missili in arrivo** con segnalatore di pericolo sul bordo destro (`tracking` -> `lock-on` -> passaggio a `1.2x`).
 - **Hyper Overdrive & Power-Up**:
   - **Barra Overdrive**: si carica gradualmente (~450–550m) raccogliendo crediti e abbattendo droni; al 100% attiva 5,5 secondi di **corsa invincibile ad alta velocità** che sfonda barriere, droni e missili generando crediti extra.
   - **Energy Shield**: assorbe un impatto fatale attivando brevi frame di invulnerabilità.
   - **Credit Magnet**: attira automaticamente tutti i crediti nel raggio d'azione.
 - **Mini-Missioni, Settori Dinamici & Officina (Upgrades & Skins)**:
-  - **3 Mini-Missioni attive** a rotazione automatica (distanza, droni, crediti, doppi salti, fast-fall, Overdrive) che assegnano **Credits bonus** al completamento.
+  - **3 Mini-Missioni attive** a rotazione automatica (distanza, droni, crediti, doppi salti, atterraggi su piattaforme aeree, Overdrive) che assegnano **Credits bonus** al completamento.
   - Ogni **300 metri** l'ambiente cambia settore (`Cyber Cyan`, `Crimson Grid`, `Solar Amber`, `Ultraviolet Core`) con transizione cromatica fluida di cielo, città e pavimento.
-  - Record personale (`highScore`), portafoglio **Credits**, 4 upgrade (**Energy Shield**, **Credit Magnet**, **Pulse Blaster**, **Credit Boost**) e **5 Skin cromatiche** sbloccabili sono salvati automaticamente in `localStorage`.
+  - Record personale (`highScore`), portafoglio **Credits**, 4 upgrade (**Energy Shield**, **Credit Magnet**, **Pulse Blaster**, **Credit Boost**) e **5 Skin cromatiche** sbloccabili (con scia luminosa coordinata) sono salvati automaticamente in `localStorage`.
 - **Audio Sintetico Zero-Dipendenze**:
-  - Effetti sonori generati in tempo reale tramite **Web Audio API** (salto, doppio salto, planata, fast-fall, atterraggio, sparo, avviso e lancio missile, overdrive smash, cambio settore, completamento missione, game over) con tasto **Mute** nell'HUD e nel menu.
+  - Effetti sonori generati in tempo reale tramite **Web Audio API** (salto, doppio salto, spinta jetpack, atterraggio, sparo, avviso e lancio missile, overdrive smash, cambio settore, completamento missione, game over) con tasto **Mute** nell'HUD e nel menu.
 - **Responsive Mobile, Orientamento & PWA Offline**:
   - Supporto sia verticale che **Orizzontale (Landscape)** dal menu con Fullscreen nativo su Android e guida rapida su iOS, ricalibrazione dinamica del canvas Phaser e aggiornamento automatico Service Worker con banner nel menu.
 
@@ -37,8 +36,7 @@ Endless runner cyberpunk ad alta velocità sviluppato con **Phaser 3**, **React 
 | Azione | Mobile (Touch) | Desktop (Mouse / Tastiera) |
 | :--- | :--- | :--- |
 | **Salto / Doppio Salto** | Tap rapido (e secondo tap in volo) | Click / `Spazio` / `↑` (e seconda pressione in volo) |
-| **Salto alto & Planata** | Tieni premuto in salita/discesa | Tieni premuto Click / `Spazio` / `↑` in salita/discesa |
-| **Picchiata rapida (Fast-Fall)** | Swipe verso il basso | `↓` oppure `S` in volo |
+| **Salto alto & Jetpack Boost** | Tieni premuto in salita o in volo | Tieni premuto Click / `Spazio` / `↑` in volo |
 | **Pausa / Riprendi** | Tasto Pausa in alto a destra | Tasto Pausa oppure `Esc` / `P` |
 
 ---

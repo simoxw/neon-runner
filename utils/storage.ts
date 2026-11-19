@@ -17,7 +17,7 @@ const VALID_MISSION_TYPES: MissionType[] = [
   'drones',
   'credits',
   'doubleJumps',
-  'fastFalls',
+  'platforms',
   'overdrive',
 ];
 
@@ -49,6 +49,7 @@ const DEFAULT_PROGRESS: PlayerProgress = {
     magnetDuration: 0,
     blasterRate: 0,
     creditMultiplier: 0,
+    jetpackThruster: 0,
   },
   missions: INITIAL_MISSION_BATCH.missions,
   missionSeed: INITIAL_MISSION_BATCH.nextSeed,
@@ -175,6 +176,7 @@ export function loadProgress(): PlayerProgress {
           magnetDuration: sanitizeLevel(parsed.upgrades?.magnetDuration),
           blasterRate: sanitizeLevel(parsed.upgrades?.blasterRate),
           creditMultiplier: sanitizeLevel(parsed.upgrades?.creditMultiplier),
+          jetpackThruster: sanitizeLevel(parsed.upgrades?.jetpackThruster),
         },
         missions: missionState.missions,
         missionSeed: missionState.missionSeed,

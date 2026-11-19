@@ -13,6 +13,8 @@ interface HUDProps {
   speedMultiplier: number;
   sectorNumber: number;
   sectorName: string;
+  comboCount: number;
+  comboMultiplier: number;
   buffs: ActiveBuffs;
   missionToast: MissionToastData | null;
   muted: boolean;
@@ -26,6 +28,8 @@ const HUD: React.FC<HUDProps> = ({
   speedMultiplier,
   sectorNumber,
   sectorName,
+  comboCount,
+  comboMultiplier,
   buffs,
   missionToast,
   muted,
@@ -60,6 +64,22 @@ const HUD: React.FC<HUDProps> = ({
           <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-300">
             <span className="font-mono-num font-bold text-emerald-400">+{runCredits}</span>
             <span className="text-slate-400">Credits</span>
+            {comboCount >= 3 && (
+              <>
+                <span aria-hidden="true" className="text-slate-600">·</span>
+                <span
+                  className={`font-mono-num font-bold ${
+                    comboMultiplier >= 3
+                      ? 'text-amber-300'
+                      : comboMultiplier >= 2
+                      ? 'text-cyan-300'
+                      : 'text-slate-300'
+                  }`}
+                >
+                  {comboMultiplier}x Streak ({comboCount})
+                </span>
+              </>
+            )}
           </div>
         </div>
 
