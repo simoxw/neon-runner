@@ -7,6 +7,7 @@ import UpgradesModal from './components/UpgradesModal.tsx';
 import { getUpgradeCost, UPGRADES_CATALOG } from './constants.ts';
 import PhaserGame from './game/PhaserGame.tsx';
 import { useOrientation } from './hooks/useOrientation.ts';
+import { usePWAUpdate } from './hooks/usePWAUpdate.ts';
 import { ActiveBuffs, GameState, OrientationMode, PlayerProgress, UpgradeId } from './types.ts';
 import { soundEngine } from './utils/sound.ts';
 import { loadProgress, saveProgress, updateUpgradeLevel } from './utils/storage.ts';
@@ -36,6 +37,7 @@ const App: React.FC = () => {
   const [isNewRecord, setIsNewRecord] = useState(false);
 
   const { showRotateHint, applyOrientation, dismissRotateHint } = useOrientation();
+  const { needRefresh, isUpdating, applyUpdate } = usePWAUpdate();
 
   const progressRef = useRef(progress);
   progressRef.current = progress;
@@ -185,12 +187,15 @@ const App: React.FC = () => {
           muted={progress.muted}
           orientationMode={progress.orientationMode}
           showRotateHint={showRotateHint}
+          hasUpdate={needRefresh}
+          isUpdatingApp={isUpdating}
           canAffordUpgrade={canAffordUpgrade}
           onStart={startGame}
           onOpenUpgrades={() => setShowUpgrades(true)}
           onToggleMute={toggleMute}
           onToggleOrientation={toggleOrientationMode}
           onDismissRotateHint={dismissRotateHint}
+          onApplyUpdate={applyUpdate}
         />
       )}
 

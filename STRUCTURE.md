@@ -28,7 +28,8 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 │   └── PhaserGame.tsx              # Wrapper React che monta e distrugge il canvas Phaser 3
 ├── hooks/
 │   ├── useOrientation.ts           # Hook per toggle orientamento Auto/Landscape, Fullscreen e avviso iOS
-│   └── usePWAInstall.ts            # Hook React per intercettare beforeinstallprompt e iOS Safari
+│   ├── usePWAInstall.ts            # Hook React per intercettare beforeinstallprompt e iOS Safari
+│   └── usePWAUpdate.ts             # Hook React per controllo/applicazione aggiornamenti Service Worker
 ├── public/
 │   ├── .nojekyll                   # Disattiva Jekyll su GitHub Pages per servire tutti gli asset
 │   ├── apple-touch-icon.png        # Icona PNG 180x180 per iOS Safari
@@ -110,6 +111,7 @@ Questo documento descrive l'organizzazione completa delle cartelle e il ruolo di
 | `utils/storage.ts` | Gestisce caricamento, validazione e salvataggio in `localStorage` (`neon_runner_progress_v2` con migrazione automatica del vecchio record) per `highScore`, `totalCredits`, `muted`, `orientationMode` e `upgrades`. |
 | `hooks/useOrientation.ts` | Hook React che gestisce la modalità **Auto** / **Landscape** usando Fullscreen API e `screen.orientation.lock('landscape')` su Android/PWA, e mostra un avviso auto-chiudibile su iOS Safari quando è richiesta la rotazione manuale. |
 | `hooks/usePWAInstall.ts` | Hook React che rileva se l'app è già installata (`display-mode: standalone`), riconosce iOS Safari e cattura l'evento `beforeinstallprompt` per attivare l'installazione con un tap. |
+| `hooks/usePWAUpdate.ts` | Hook React basato su `virtual:pwa-register`: forza il controllo del nuovo Service Worker al rientro sull'app (`visibilitychange`, `focus`, `online`) e applica `skipWaiting` + reload quando l'utente preme **Update Now** nel Menu. |
 
 ---
 

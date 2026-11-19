@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCw, Smartphone, Volume2, VolumeX, Wrench, X } from 'lucide-react';
+import { RefreshCw, RotateCw, Smartphone, Volume2, VolumeX, Wrench, X } from 'lucide-react';
 import { OrientationMode } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -9,12 +9,15 @@ interface MenuProps {
   muted: boolean;
   orientationMode: OrientationMode;
   showRotateHint: boolean;
+  hasUpdate: boolean;
+  isUpdatingApp: boolean;
   canAffordUpgrade: boolean;
   onStart: () => void;
   onOpenUpgrades: () => void;
   onToggleMute: () => void;
   onToggleOrientation: () => void;
   onDismissRotateHint: () => void;
+  onApplyUpdate: () => void;
 }
 
 const Menu: React.FC<MenuProps> = ({
@@ -23,12 +26,15 @@ const Menu: React.FC<MenuProps> = ({
   muted,
   orientationMode,
   showRotateHint,
+  hasUpdate,
+  isUpdatingApp,
   canAffordUpgrade,
   onStart,
   onOpenUpgrades,
   onToggleMute,
   onToggleOrientation,
   onDismissRotateHint,
+  onApplyUpdate,
 }) => {
   const isLandscapeLocked = orientationMode === 'landscape';
 
@@ -64,6 +70,23 @@ const Menu: React.FC<MenuProps> = ({
           {muted ? <VolumeX className="h-5 w-5 text-rose-400" /> : <Volume2 className="h-5 w-5 text-cyan-400" />}
         </button>
       </div>
+
+      {hasUpdate && (
+        <div className="mt-2 flex w-full max-w-md items-center justify-between gap-3 rounded-lg border border-emerald-400/40 bg-[#0d1021]/95 px-3.5 py-2 text-xs text-slate-200 shadow-lg">
+          <div className="flex items-center gap-2">
+            <RefreshCw className={`h-4 w-4 shrink-0 text-emerald-400 ${isUpdatingApp ? 'animate-spin' : ''}`} />
+            <span>New version available.</span>
+          </div>
+          <button
+            type="button"
+            disabled={isUpdatingApp}
+            onClick={onApplyUpdate}
+            className="inline-flex min-h-[44px] items-center justify-center rounded-md bg-emerald-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 transition hover:bg-emerald-300 active:scale-95 disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            {isUpdatingApp ? 'Updating...' : 'Update Now'}
+          </button>
+        </div>
+      )}
 
       {showRotateHint && (
         <div className="mt-2 flex w-full max-w-md items-center justify-between gap-3 rounded-lg border border-cyan-400/40 bg-[#0d1021]/95 px-3.5 py-2 text-xs text-slate-200 shadow-lg">
