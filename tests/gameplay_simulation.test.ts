@@ -3,6 +3,7 @@ import { GAME_CONFIG, getJetpackMaxFuelMs } from '../constants';
 import {
   advanceComboOnEvent,
   advanceLaserState,
+  computeBossMaxHp,
   computeCreditReward,
   computeRefilledFuel,
   computeSectorIndex,
@@ -14,6 +15,7 @@ import {
   LaserState,
   PatternId,
   pickNextPattern,
+  pickPowerupType,
   resetCombo,
   resolveDroneBulletHit,
   shouldCollideWithGround,
@@ -136,13 +138,50 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
     expect(chargePer100mLowEstimate).toBeGreaterThanOrEqual(8);
   });
 
-  it('scales speed smoothly at +20px/s every 220m starting from 420px/s', () => {
-    expect(computeSpeedForScore(0)).toBe(420);
-    expect(computeSpeedForScore(219)).toBe(420);
-    expect(computeSpeedForScore(220)).toBe(440);
-    expect(computeSpeedForScore(440)).toBe(460);
-    expect(computeSpeedForScore(660)).toBe(480);
-    expect(computeSpeedForScore(99999)).toBe(GAME_CONFIG.MAX_SPEED);
+  it('scales speed smoothly in Classic and Turbo modes and applies 1.5x Turbo credit bonus', () => {
+    expect(computeSpeedForScore(0, 'classic')).toBe(420);
+    expect(computeSpeedForScore(219, 'classic')).toBe(420);
+    expect(computeSpeedForScore(220, 'classic')).toBe(440);
+    expect(computeSpeedForScore(440, 'classic')).toBe(460);
+    expect(computeSpeedForScore(660, 'classic')).toBe(480);
+    expect(computeSpeedForScore(99999, 'classic')).toBe(GAME_CONFIG.MAX_SPEED);
+
+    expect(computeSpeedForScore(0, 'turbo')).toBe(GAME_CONFIG.TURBO_BASE_SPEED);
+    expect(computeSpeedForScore(220, 'turbo')).toBe(
+      GAME_CONFIG.TURBO_BASE_SPEED + GAME_CONFIG.TURBO_SPEED_INCREMENT
+    );
+    expect(computeSpeedForScore(99999, 'turbo')).toBe(GAME_CONFIG.TURBO_MAX_SPEED);
+
+    const classicReward = computeCreditReward(4, 0, 1, 'classic');
+    const turboReward = computeCreditReward(4, 0, 1, 'turbo');
+    expect(classicReward).toBe(4);
+    expect(turboReward).toBe(6);
+  });
+
+  it('balances power-up drops at 70% Magnet and 30% Shield', () => {
+    let seed = 42;
+    const rng = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+
+    let magnets = 0;
+    const total = 1000;
+    for (let i = 0; i < total; i++) {
+      if (pickPowerupType(rng) === 'magnet') {
+        magnets += 1;
+      }
+    }
+    const ratio = magnets / total;
+    expect(ratio).toBeGreaterThan(0.65);
+    expect(ratio).toBeLessThan(0.75);
+  });
+
+  it('scales Boss Drone max HP across encounters up to the cap', () => {
+    expect(computeBossMaxHp(1)).toBe(10);
+    expect(computeBossMaxHp(2)).toBe(14);
+    expect(computeBossMaxHp(3)).toBe(18);
+    expect(computeBossMaxHp(10)).toBe(26);
   });
 
   it('disables ground collision cleanly over road chasms, blocks edge-snapping once fallen, and hovers in Overdrive', () => {
@@ -164,23 +203,27 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
     expect(shouldCollideWithGround(270, groundTop - 30, groundTop, gaps, true)).toBe(true);
   });
 
-  it('unlocks advanced obstacle patterns progressively across distance thresholds', () => {
+  it('unlocks advanced obstacle patterns including Jump Pads and Moving Lasers progressively', () => {
     const startPool = getEligiblePatterns(0);
     expect(startPool).not.toContain('road_chasm');
+    expect(startPool).not.toContain('jump_pad_skyline');
     expect(startPool).not.toContain('double_chasm_bridge');
     expect(startPool).not.toContain('laser_bypass');
 
-    const at35m = getEligiblePatterns(35);
-    expect(at35m).toContain('road_chasm');
-    expect(at35m).not.toContain('double_chasm_bridge');
+    const at55m = getEligiblePatterns(55);
+    expect(at55m).toContain('road_chasm');
+    expect(at55m).toContain('jump_pad_skyline');
+    expect(at55m).not.toContain('jump_pad_chasm_launch');
 
-    const at120m = getEligiblePatterns(120);
-    expect(at120m).toContain('double_chasm_bridge');
-    expect(at120m).not.toContain('laser_bypass');
+    const at145m = getEligiblePatterns(145);
+    expect(at145m).toContain('double_chasm_bridge');
+    expect(at145m).toContain('jump_pad_chasm_launch');
+    expect(at145m).not.toContain('moving_laser_corridor');
 
     const atSector2 = getEligiblePatterns(GAME_CONFIG.SECTOR_INTERVAL_METERS);
     expect(atSector2).toContain('laser_bypass');
     expect(atSector2).toContain('laser_drone_cross');
+    expect(atSector2).toContain('moving_laser_corridor');
   });
 
   it('prevents pattern repetition within the last 3 draws and never starts chains from chasms', () => {
@@ -194,7 +237,7 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
     let chainCount = 0;
     const observed = new Set<PatternId>();
 
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 240; i++) {
       const scoreMeters = 400 + i * 2;
       const pick = pickNextPattern(scoreMeters, recent, deterministicRng);
 
@@ -211,7 +254,7 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
       expect(recent.length).toBeLessThanOrEqual(3);
     }
 
-    expect(observed.size).toBe(14);
+    expect(observed.size).toBe(17);
     expect(chainCount).toBeGreaterThan(20);
   });
 });

@@ -6,7 +6,7 @@ import {
   getShieldDurationMs,
   SECTORS_PALETTE,
 } from '../../constants';
-import { PlayerProgress } from '../../types';
+import { PlayerProgress, RunMode } from '../../types';
 import {
   advanceComboOnEvent,
   ComboState,
@@ -58,7 +58,10 @@ export class MainGame extends Phaser.Scene {
   public runCredits: number = 0;
   public dronesDestroyed: number = 0;
   public platformsLanded: number = 0;
+  public bossesDefeated: number = 0;
+  public maxCombo: number = 0;
   public combo: ComboState = resetCombo();
+  public runMode: RunMode = 'classic';
   public currentSpeed: number = GAME_CONFIG.BASE_SPEED;
   public currentSectorIndex: number = 0;
   public isGameOver: boolean = false;
@@ -68,6 +71,8 @@ export class MainGame extends Phaser.Scene {
   private progress: PlayerProgress = loadProgress();
   private lastBuffEmitTime: number = 0;
   private lastDifficultyStep: number = 0;
+  private prevBossActive: boolean = false;
+  private prevBossHp: number = 0;
 
   constructor() {
     super('MainGame');
@@ -192,7 +197,16 @@ export class MainGame extends Phaser.Scene {
     );
     this.applyProgressToPlayer();
 
-    this.obstacleManager = new ObstacleManager(this);
+    this.obstacleManager = new ObstacleManager(this, (bossNumber) => {
+      const { width, height } = this.scale;
+      this.spawnFloatingText(
+        width / 2,
+        Math.max(115, height * 0.25),
+        `ALLERTA BOSS DRONE #${bossNumber}`,
+        '#ff2a6d'
+      );
+      this.emitRunUpdate();
+    });
     this.physics.add.collider(
       this.player,
       this.groundBody,
@@ -308,6 +322,22 @@ export class MainGame extends Phaser.Scene {
       this
     );
 
+    this.physics.add.overlap(
+      this.player,
+      this.obstacleManager.jumpPads,
+      this.handleJumpPadOverlap as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
+
+    this.physics.add.overlap(
+      this.player,
+      this.obstacleManager.bosses,
+      this.handleBossHazardCollision as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
+
     if (this.player.bullets) {
       this.physics.add.overlap(
         this.player.bullets,
@@ -321,6 +351,14 @@ export class MainGame extends Phaser.Scene {
         this.player.bullets,
         this.obstacleManager.drones,
         this.handleBulletDroneHit as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+        undefined,
+        this
+      );
+
+      this.physics.add.overlap(
+        this.player.bullets,
+        this.obstacleManager.bosses,
+        this.handleBulletBossHit as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
         undefined,
         this
       );
@@ -343,6 +381,7 @@ export class MainGame extends Phaser.Scene {
     const upKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
     const escKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const pKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    const eKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
     spaceKey?.on('down', onPointerDown);
     spaceKey?.on('up', onPointerUp);
@@ -358,16 +397,28 @@ export class MainGame extends Phaser.Scene {
       }
     };
 
+    const triggerEmpFromKey = () => {
+      this.executeEmpWave();
+    };
+
     escKey?.on('down', togglePauseFromKey);
     pKey?.on('down', togglePauseFromKey);
+    eKey?.on('down', triggerEmpFromKey);
 
     this.scale.on('resize', this.handleResize, this);
 
-    const startHandler = () => this.startRunning();
-    const restartHandler = () => this.restart();
+    const startHandler = (evt: Event) => {
+      const detail = (evt as CustomEvent<{ runMode?: RunMode }>).detail;
+      this.startRunning(detail?.runMode);
+    };
+    const restartHandler = (evt: Event) => {
+      const detail = (evt as CustomEvent<{ runMode?: RunMode }>).detail;
+      this.restart(detail?.runMode);
+    };
     const pauseHandler = () => this.pauseGame();
     const resumeHandler = () => this.resumeGame();
     const quitMenuHandler = () => this.returnToMenu();
+    const empHandler = () => this.executeEmpWave();
     const syncProgressHandler = () => {
       this.progress = loadProgress();
       soundEngine.setMuted(this.progress.muted);
@@ -379,6 +430,7 @@ export class MainGame extends Phaser.Scene {
     window.addEventListener('PHASER_PAUSE', pauseHandler);
     window.addEventListener('PHASER_RESUME', resumeHandler);
     window.addEventListener('PHASER_MENU', quitMenuHandler);
+    window.addEventListener('PHASER_EMP', empHandler);
     window.addEventListener('PHASER_SYNC_PROGRESS', syncProgressHandler);
 
     this.events.once('shutdown', () => {
@@ -391,6 +443,7 @@ export class MainGame extends Phaser.Scene {
       upKey?.off('up', onPointerUp);
       escKey?.off('down', togglePauseFromKey);
       pKey?.off('down', togglePauseFromKey);
+      eKey?.off('down', triggerEmpFromKey);
       this.scale.off('resize', this.handleResize, this);
 
       window.removeEventListener('PHASER_START', startHandler);
@@ -398,6 +451,7 @@ export class MainGame extends Phaser.Scene {
       window.removeEventListener('PHASER_PAUSE', pauseHandler);
       window.removeEventListener('PHASER_RESUME', resumeHandler);
       window.removeEventListener('PHASER_MENU', quitMenuHandler);
+      window.removeEventListener('PHASER_EMP', empHandler);
       window.removeEventListener('PHASER_SYNC_PROGRESS', syncProgressHandler);
     });
 
@@ -494,7 +548,8 @@ export class MainGame extends Phaser.Scene {
     this.player.setUpgradeLevels(
       this.progress.upgrades.blasterRate,
       this.progress.upgrades.magnetDuration,
-      this.progress.upgrades.jetpackThruster
+      this.progress.upgrades.jetpackThruster,
+      this.progress.upgrades.empWave
     );
     this.player.setSkin(this.progress.equippedSkin);
   }
@@ -669,7 +724,8 @@ export class MainGame extends Phaser.Scene {
       this.distance,
       this.currentSpeed,
       Boolean(this.player?.overdriveActive),
-      delta
+      delta,
+      this.runMode
     );
     this.distance = stepResult.nextDistance;
     const effectiveSpeed = stepResult.effectiveSpeed;
@@ -680,7 +736,7 @@ export class MainGame extends Phaser.Scene {
       const step = Math.floor(this.score / GAME_CONFIG.DIFFICULTY_INTERVAL_METERS);
       if (step > this.lastDifficultyStep) {
         this.lastDifficultyStep = step;
-        this.currentSpeed = computeSpeedForScore(this.score);
+        this.currentSpeed = computeSpeedForScore(this.score, this.runMode);
       }
 
       const nextSector = computeSectorIndex(this.score);
@@ -715,7 +771,8 @@ export class MainGame extends Phaser.Scene {
       if (
         (this.player.shieldRemaining > 0 ||
           this.player.magnetRemaining > 0 ||
-          this.player.overdriveRemaining > 0) &&
+          this.player.overdriveRemaining > 0 ||
+          this.player.empCooldownRemaining > 0) &&
         time - this.lastBuffEmitTime > 120
       ) {
         this.lastBuffEmitTime = time;
@@ -725,13 +782,23 @@ export class MainGame extends Phaser.Scene {
 
     if (this.obstacleManager) {
       this.obstacleManager.update(time, delta, effectiveSpeed, this.player, this.score);
+      if (
+        this.obstacleManager.bossActive !== this.prevBossActive ||
+        this.obstacleManager.bossHp !== this.prevBossHp
+      ) {
+        this.prevBossActive = this.obstacleManager.bossActive;
+        this.prevBossHp = this.obstacleManager.bossHp;
+        this.emitRunUpdate();
+      }
     }
   }
 
-  startRunning() {
+  startRunning(requestedMode?: RunMode) {
     soundEngine.unlock();
     this.progress = loadProgress();
     soundEngine.setMuted(this.progress.muted);
+    this.runMode = requestedMode ?? this.progress.runMode;
+    this.currentSpeed = computeSpeedForScore(0, this.runMode);
     this.applyProgressToPlayer();
     this.applySectorPaletteImmediate(0);
     this.isPausedState = false;
@@ -739,6 +806,7 @@ export class MainGame extends Phaser.Scene {
     this.isStarted = true;
     this.isGameOver = false;
     this.emitEvent('GAME_START', {
+      runMode: this.runMode,
       speedMultiplier: this.getSpeedMultiplier(),
       sectorNumber: 1,
       sectorName: SECTORS_PALETTE[0].name,
@@ -777,6 +845,157 @@ export class MainGame extends Phaser.Scene {
     this.emitBuffUpdate();
   }
 
+  private bumpCombo(gain: number) {
+    this.combo = advanceComboOnEvent(this.combo, gain);
+    this.maxCombo = Math.max(this.maxCombo, this.combo.count);
+  }
+
+  private executeEmpWave() {
+    if (!this.isStarted || this.isGameOver || this.isPausedState || !this.player || !this.obstacleManager) {
+      return;
+    }
+    if (!this.player.consumeEmpCooldown()) return;
+
+    const px = this.player.x;
+    const py = this.player.y;
+    const result = this.obstacleManager.triggerEmpBlast(this.time.now);
+
+    if (this.textures.exists('emp_wave_ring')) {
+      const ring = this.add
+        .image(px, py, 'emp_wave_ring')
+        .setDepth(14)
+        .setScale(0.35)
+        .setAlpha(0.95)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: ring,
+        scale: 8.5,
+        alpha: 0,
+        duration: 420,
+        ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    this.cameras.main.shake(150, 0.008);
+    soundEngine.playEmpBlast();
+    this.spawnFloatingText(px, py - 46, 'ONDA EMP!', '#00f3ff');
+
+    let empBonus = 0;
+    for (let i = 0; i < result.clearedPoints.length; i++) {
+      const pt = result.clearedPoints[i];
+      this.bumpCombo(1);
+      empBonus += computeCreditReward(
+        pt.points,
+        this.progress.upgrades.creditMultiplier,
+        this.combo.multiplier,
+        this.runMode
+      );
+      this.explosionEmitter?.explode(12, pt.x, pt.y);
+    }
+
+    if (empBonus > 0) {
+      this.runCredits += empBonus;
+    }
+    if (result.dronesCleared > 0) {
+      this.dronesDestroyed += result.dronesCleared;
+    }
+
+    if (result.bossDefeated && result.bossPos) {
+      this.awardBossDefeat(result.bossPos.x, result.bossPos.y, result.bossPos.bountyBase);
+    }
+
+    this.emitRunUpdate();
+    this.emitBuffUpdate();
+  }
+
+  private awardBossDefeat(bx: number, by: number, bountyBase: number) {
+    this.bossesDefeated += 1;
+    this.dronesDestroyed += 1;
+    this.bumpCombo(4);
+    const bounty = computeCreditReward(
+      bountyBase,
+      this.progress.upgrades.creditMultiplier,
+      this.combo.multiplier,
+      this.runMode
+    );
+    this.runCredits += bounty;
+    this.player?.addOverdriveCharge(25);
+    this.explosionEmitter?.explode(36, bx, by);
+    this.pickupEmitter?.explode(24, bx, by);
+    this.cameras.main.shake(220, 0.012);
+    soundEngine.playBossDefeat();
+    this.spawnFloatingText(bx, by - 20, `BOSS ABBATTUTO! +${bounty}`, '#ffc857');
+  }
+
+  private handleJumpPadOverlap = (_playerObj: unknown, padObj: unknown) => {
+    if (!this.isStarted || this.isGameOver || this.isPausedState || !this.player) return;
+    const pad = padObj as Phaser.Physics.Arcade.Sprite;
+    if (!pad || !pad.active || pad.getData('triggered')) return;
+
+    pad.setData('triggered', true);
+    this.player.launchFromJumpPad();
+    this.pickupEmitter?.explode(14, pad.x, pad.y - 6);
+    this.spawnFloatingText(pad.x, pad.y - 26, 'BOOST JUMP!', '#00ff9d');
+  };
+
+  private handleBossHazardCollision = (_playerObj: unknown, bossObj: unknown) => {
+    if (this.isGameOver || !this.isStarted || this.isPausedState || !this.player || !this.obstacleManager) {
+      return;
+    }
+    const boss = bossObj as Phaser.Physics.Arcade.Sprite;
+    if (!boss || !boss.active) return;
+
+    const now = this.time.now;
+    if (this.player.overdriveActive) {
+      if (this.player.isInvulnerable(now) && now < this.player.invulnUntil) return;
+      this.player.invulnUntil = now + 480;
+      const dmg = this.obstacleManager.damageBoss(Math.max(6, Math.ceil(this.obstacleManager.bossMaxHp * 0.5)));
+      if (dmg.hit) {
+        this.cameras.main.shake(120, 0.009);
+        soundEngine.playOverdriveSmash();
+        this.explosionEmitter?.explode(20, dmg.x, dmg.y);
+        if (dmg.defeated) {
+          this.awardBossDefeat(dmg.x, dmg.y, dmg.bountyBase);
+        }
+        this.emitRunUpdate();
+      }
+      return;
+    }
+
+    if (this.player.isInvulnerable(now)) return;
+
+    if (this.player.consumeShield(now)) {
+      this.cameras.main.shake(180, 0.01);
+      this.combo = resetCombo();
+      this.emitRunUpdate();
+      return;
+    }
+
+    this.triggerFatalGameOver();
+  };
+
+  private handleBulletBossHit = (bulletObj: unknown, bossObj: unknown) => {
+    const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
+    const boss = bossObj as Phaser.Physics.Arcade.Sprite;
+    if (!bullet || !bullet.active || !boss || !boss.active || !this.obstacleManager) return;
+
+    const bx = bullet.x;
+    const by = bullet.y;
+    bullet.disableBody(true, true);
+
+    const dmg = this.obstacleManager.damageBoss(1);
+    if (!dmg.hit) return;
+
+    this.sparkEmitter?.explode(10, bx, by);
+    if (dmg.defeated) {
+      this.awardBossDefeat(dmg.x, dmg.y, dmg.bountyBase);
+    } else {
+      soundEngine.playArmorCrack();
+    }
+    this.emitRunUpdate();
+  };
+
   private handleLaserCollision = (playerObj: unknown, laserObj: unknown) => {
     const laser = laserObj as Phaser.Physics.Arcade.Sprite;
     if (!laser || !laser.active) return;
@@ -800,11 +1019,12 @@ export class MainGame extends Phaser.Scene {
         this.cameras.main.shake(90, 0.008);
         soundEngine.playOverdriveSmash();
 
-        this.combo = advanceComboOnEvent(this.combo, 1);
+        this.bumpCombo(1);
         const smashBonus = computeCreditReward(
           3,
           this.progress.upgrades.creditMultiplier,
-          this.combo.multiplier
+          this.combo.multiplier,
+          this.runMode
         );
         this.runCredits += smashBonus;
         this.spawnFloatingText(hx, hy - 14, `+${smashBonus} SMASH`, '#ffc857');
@@ -852,6 +1072,9 @@ export class MainGame extends Phaser.Scene {
       overdrivesTriggered: this.player.overdrivesTriggered,
       comboCount: this.combo.count,
       comboMultiplier: this.combo.multiplier,
+      maxCombo: this.maxCombo,
+      runMode: this.runMode,
+      bossesDefeated: this.bossesDefeated,
     });
   }
 
@@ -879,11 +1102,12 @@ export class MainGame extends Phaser.Scene {
     ring.disableBody(true, true);
 
     this.player.refillJetpack();
-    this.combo = advanceComboOnEvent(this.combo, 2);
+    this.bumpCombo(2);
     const earned = computeCreditReward(
       3,
       this.progress.upgrades.creditMultiplier,
-      this.combo.multiplier
+      this.combo.multiplier,
+      this.runMode
     );
     this.runCredits += earned;
     this.player.addOverdriveCharge(GAME_CONFIG.OVERDRIVE_CHARGE_PER_RING);
@@ -901,11 +1125,12 @@ export class MainGame extends Phaser.Scene {
     const cy = coin.y;
     coin.disableBody(true, true);
 
-    this.combo = advanceComboOnEvent(this.combo, 1);
+    this.bumpCombo(1);
     const earned = computeCreditReward(
       1,
       this.progress.upgrades.creditMultiplier,
-      this.combo.multiplier
+      this.combo.multiplier,
+      this.runMode
     );
     this.runCredits += earned;
 
@@ -926,10 +1151,10 @@ export class MainGame extends Phaser.Scene {
 
     if (type === 'shield') {
       this.player.activateShield(getShieldDurationMs(this.progress.upgrades.shieldDuration));
-      this.spawnFloatingText(px, py - 12, 'SHIELD', '#00f3ff');
+      this.spawnFloatingText(px, py - 12, 'SCUDO', '#00f3ff');
     } else {
       this.player.activateMagnet(getMagnetDurationMs(this.progress.upgrades.magnetDuration));
-      this.spawnFloatingText(px, py - 12, 'MAGNET', '#ffc857');
+      this.spawnFloatingText(px, py - 12, 'MAGNETE', '#ffc857');
     }
 
     this.pickupEmitter?.explode(16, px, py);
@@ -970,11 +1195,12 @@ export class MainGame extends Phaser.Scene {
     const wasArmored = Boolean(drone.getData('armored'));
     drone.disableBody(true, true);
 
-    this.combo = advanceComboOnEvent(this.combo, wasArmored ? 2 : 1);
+    this.bumpCombo(wasArmored ? 2 : 1);
     const earned = computeCreditReward(
       wasArmored ? 4 : 2,
       this.progress.upgrades.creditMultiplier,
-      this.combo.multiplier
+      this.combo.multiplier,
+      this.runMode
     );
     this.runCredits += earned;
     this.dronesDestroyed += 1;
@@ -1027,6 +1253,12 @@ export class MainGame extends Phaser.Scene {
       overdrivesTriggered: this.player?.overdrivesTriggered ?? 0,
       comboCount: this.combo.count,
       comboMultiplier: this.combo.multiplier,
+      maxCombo: this.maxCombo,
+      runMode: this.runMode,
+      bossesDefeated: this.bossesDefeated,
+      bossActive: this.obstacleManager?.bossActive ?? false,
+      bossHp: this.obstacleManager?.bossHp ?? 0,
+      bossMaxHp: this.obstacleManager?.bossMaxHp ?? 0,
     });
   }
 
@@ -1041,6 +1273,9 @@ export class MainGame extends Phaser.Scene {
       overdriveActive: this.player.overdriveActive,
       overdriveRemaining: this.player.overdriveRemaining,
       overdriveMax: this.player.overdriveMax,
+      empUnlocked: this.player.empWaveLevel > 0,
+      empCooldownRemaining: this.player.empCooldownRemaining,
+      empCooldownMax: this.player.empCooldownMax,
     });
   }
 
@@ -1050,10 +1285,14 @@ export class MainGame extends Phaser.Scene {
     this.runCredits = 0;
     this.dronesDestroyed = 0;
     this.platformsLanded = 0;
+    this.bossesDefeated = 0;
+    this.maxCombo = 0;
     this.combo = resetCombo();
     this.lastDifficultyStep = 0;
     this.currentSectorIndex = 0;
-    this.currentSpeed = GAME_CONFIG.BASE_SPEED;
+    this.prevBossActive = false;
+    this.prevBossHp = 0;
+    this.currentSpeed = computeSpeedForScore(0, this.runMode);
     this.isGameOver = false;
     this.isStarted = false;
     this.isPausedState = false;
@@ -1061,9 +1300,10 @@ export class MainGame extends Phaser.Scene {
     this.applySectorPaletteImmediate(0);
   }
 
-  restart() {
+  restart(requestedMode?: RunMode) {
     this.progress = loadProgress();
     soundEngine.setMuted(this.progress.muted);
+    this.runMode = requestedMode ?? this.progress.runMode;
     this.applyProgressToPlayer();
     this.physics.world.resume();
     this.anims.resumeAll();
@@ -1073,7 +1313,7 @@ export class MainGame extends Phaser.Scene {
     const gh = getGroundHeight(height);
     const playerStartX = Math.min(130, Math.max(76, width * 0.16));
     this.player?.reset(playerStartX, height - gh - 36);
-    this.startRunning();
+    this.startRunning(this.runMode);
   }
 
   emitEvent(type: string, data: Record<string, unknown>) {

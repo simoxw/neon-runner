@@ -7,14 +7,25 @@ export enum GameState {
 
 export type OrientationMode = 'auto' | 'landscape';
 
-export type SkinId = 'cyan' | 'crimson' | 'solar' | 'emerald' | 'violet';
+export type RunMode = 'classic' | 'turbo';
+
+export type SkinId =
+  | 'cyan'
+  | 'crimson'
+  | 'solar'
+  | 'emerald'
+  | 'violet'
+  | 'apex_chrome'
+  | 'boss_slayer'
+  | 'turbo_phantom';
 
 export type UpgradeId =
   | 'shieldDuration'
   | 'magnetDuration'
   | 'blasterRate'
   | 'creditMultiplier'
-  | 'jetpackThruster';
+  | 'jetpackThruster'
+  | 'empWave';
 
 export type MissionType =
   | 'distance'
@@ -34,16 +45,33 @@ export interface ActiveMission {
   completed: boolean;
 }
 
+export interface DailyRewardState {
+  lastClaimDate: string | null;
+  streak: number;
+}
+
+export interface CareerStats {
+  totalRuns: number;
+  totalDistance: number;
+  totalDrones: number;
+  totalBosses: number;
+  bestCombo: number;
+}
+
 export interface PlayerProgress {
   highScore: number;
+  turboHighScore: number;
   totalCredits: number;
   muted: boolean;
   orientationMode: OrientationMode;
+  runMode: RunMode;
   unlockedSkins: SkinId[];
   equippedSkin: SkinId;
   upgrades: Record<UpgradeId, number>;
   missions: ActiveMission[];
   missionSeed: number;
+  dailyReward: DailyRewardState;
+  career: CareerStats;
 }
 
 export interface ActiveBuffs {
@@ -55,6 +83,9 @@ export interface ActiveBuffs {
   overdriveActive: boolean;
   overdriveRemaining: number;
   overdriveMax: number;
+  empUnlocked: boolean;
+  empCooldownRemaining: number;
+  empCooldownMax: number;
 }
 
 export interface RunTelemetry {
@@ -69,4 +100,10 @@ export interface RunTelemetry {
   overdrivesTriggered: number;
   comboCount: number;
   comboMultiplier: number;
+  maxCombo: number;
+  runMode: RunMode;
+  bossesDefeated: number;
+  bossActive: boolean;
+  bossHp: number;
+  bossMaxHp: number;
 }

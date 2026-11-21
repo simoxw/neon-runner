@@ -421,6 +421,110 @@ class SoundEngine {
     osc.start(now);
     osc.stop(now + 0.13);
   }
+
+  playJumpPad() {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(980, now + 0.22);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.25);
+  }
+
+  playEmpBlast() {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const low = ctx.createOscillator();
+    const lowGain = ctx.createGain();
+    low.type = 'sawtooth';
+    low.frequency.setValueAtTime(420, now);
+    low.frequency.exponentialRampToValueAtTime(48, now + 0.36);
+    lowGain.gain.setValueAtTime(0.18, now);
+    lowGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+    low.connect(lowGain);
+    lowGain.connect(ctx.destination);
+    low.start(now);
+    low.stop(now + 0.4);
+
+    const shimmer = ctx.createOscillator();
+    const shimmerGain = ctx.createGain();
+    shimmer.type = 'sine';
+    shimmer.frequency.setValueAtTime(1480, now);
+    shimmer.frequency.exponentialRampToValueAtTime(620, now + 0.25);
+    shimmerGain.gain.setValueAtTime(0.08, now);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+    shimmer.connect(shimmerGain);
+    shimmerGain.connect(ctx.destination);
+    shimmer.start(now);
+    shimmer.stop(now + 0.27);
+  }
+
+  playBossAlert() {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [0, 0.18, 0.36].forEach((offset) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      const t = now + offset;
+      osc.frequency.setValueAtTime(190, t);
+      osc.frequency.linearRampToValueAtTime(280, t + 0.11);
+      gain.gain.setValueAtTime(0.11, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.15);
+    });
+  }
+
+  playBossDefeat() {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [220, 329.63, 440, 659.25, 880].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const t = now + idx * 0.06;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.25);
+    });
+  }
+
+  playDailyClaim() {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5, 1318.51].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const t = now + idx * 0.055;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.1, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.2);
+    });
+  }
 }
 
 export const soundEngine = new SoundEngine();

@@ -1,4 +1,5 @@
-import { GAME_CONFIG, getCreditMultiplier } from '../constants';
+import { GAME_CONFIG, getCreditMultiplier, getDailyRewardCredits } from '../constants';
+import { DailyRewardState, PlayerProgress, RunMode, SkinId } from '../types';
 
 export interface ComboState {
   count: number;
@@ -53,11 +54,22 @@ export function resetCombo(): ComboState {
 export function computeCreditReward(
   baseAmount: number,
   upgradeLevel: number,
-  comboMultiplier: number
+  comboMultiplier: number,
+  runMode: RunMode = 'classic'
 ): number {
   const upgradeMult = getCreditMultiplier(upgradeLevel);
   const safeCombo = Math.max(1, comboMultiplier);
-  return Math.max(1, Math.round(baseAmount * upgradeMult * safeCombo));
+  const modeMult = runMode === 'turbo' ? GAME_CONFIG.TURBO_CREDIT_MULTIPLIER : 1;
+  return Math.max(1, Math.round(baseAmount * upgradeMult * safeCombo * modeMult));
+}
+
+export function pickPowerupType(rng: () => number = Math.random): 'magnet' | 'shield' {
+  return rng() < GAME_CONFIG.MAGNET_DROP_PROBABILITY ? 'magnet' : 'shield';
+}
+
+export function computeBossMaxHp(bossIndex: number): number {
+  const safeIndex = Math.max(1, Math.floor(bossIndex));
+  return Math.min(26, 10 + (safeIndex - 1) * 4);
 }
 
 export function advanceLaserState(state: LaserState, deltaMs: number): LaserState {
@@ -87,14 +99,16 @@ export function stepRunDistance(
   currentDistance: number,
   currentSpeed: number,
   overdriveActive: boolean,
-  deltaMs: number
+  deltaMs: number,
+  runMode: RunMode = 'classic'
 ): {
   nextDistance: number;
   nextScore: number;
   effectiveSpeed: number;
 } {
+  const cap = runMode === 'turbo' ? GAME_CONFIG.TURBO_MAX_SPEED : GAME_CONFIG.MAX_SPEED;
   const effectiveSpeed = overdriveActive
-    ? Math.min(GAME_CONFIG.MAX_SPEED + 180, currentSpeed + GAME_CONFIG.OVERDRIVE_SPEED_BONUS)
+    ? Math.min(cap + 180, currentSpeed + GAME_CONFIG.OVERDRIVE_SPEED_BONUS)
     : currentSpeed;
   const dtSec = Math.max(0, deltaMs) / 1000;
   const nextDistance = currentDistance + (effectiveSpeed * dtSec) / 14;
@@ -109,8 +123,17 @@ export function computeSectorIndex(scoreMeters: number): number {
   return Math.max(0, Math.floor(scoreMeters / GAME_CONFIG.SECTOR_INTERVAL_METERS));
 }
 
-export function computeSpeedForScore(scoreMeters: number): number {
+export function computeSpeedForScore(
+  scoreMeters: number,
+  runMode: RunMode = 'classic'
+): number {
   const steps = Math.max(0, Math.floor(scoreMeters / GAME_CONFIG.DIFFICULTY_INTERVAL_METERS));
+  if (runMode === 'turbo') {
+    return Math.min(
+      GAME_CONFIG.TURBO_MAX_SPEED,
+      GAME_CONFIG.TURBO_BASE_SPEED + steps * GAME_CONFIG.TURBO_SPEED_INCREMENT
+    );
+  }
   return Math.min(
     GAME_CONFIG.MAX_SPEED,
     GAME_CONFIG.BASE_SPEED + steps * GAME_CONFIG.SPEED_INCREMENT
@@ -171,10 +194,13 @@ export type PatternId =
   | 'sky_staircase'
   | 'sky_rail_gauntlet'
   | 'sky_slalom'
+  | 'jump_pad_skyline'
+  | 'jump_pad_chasm_launch'
   | 'road_chasm'
   | 'double_chasm_bridge'
   | 'laser_bypass'
   | 'laser_drone_cross'
+  | 'moving_laser_corridor'
   | 'coin_wave';
 
 export function getEligiblePatterns(scoreMeters: number): PatternId[] {
@@ -194,18 +220,28 @@ export function getEligiblePatterns(scoreMeters: number): PatternId[] {
   if (scoreMeters >= 35) {
     base.push('road_chasm');
   }
+  if (scoreMeters >= 50) {
+    base.push('jump_pad_skyline');
+  }
   if (scoreMeters >= 120) {
     base.push('double_chasm_bridge');
   }
+  if (scoreMeters >= 140) {
+    base.push('jump_pad_chasm_launch');
+  }
   if (scoreMeters >= GAME_CONFIG.SECTOR_INTERVAL_METERS) {
-    base.push('laser_bypass', 'laser_drone_cross');
+    base.push('laser_bypass', 'laser_drone_cross', 'moving_laser_corridor');
   }
 
   return base;
 }
 
 export function isChasmPattern(patternId: PatternId): boolean {
-  return patternId === 'road_chasm' || patternId === 'double_chasm_bridge';
+  return (
+    patternId === 'road_chasm' ||
+    patternId === 'double_chasm_bridge' ||
+    patternId === 'jump_pad_chasm_launch'
+  );
 }
 
 export function pickNextPattern(
@@ -229,11 +265,10 @@ export function pickNextPattern(
     }
   }
 
-  // Keep road chasms slightly less frequent than standard modules (~15-20% max weight)
   const weightedPool: PatternId[] = [];
   for (let i = 0; i < candidates.length; i++) {
     const id = candidates[i];
-    const weight = id === 'coin_wave' ? 1 : isChasmPattern(id) ? 2 : 2;
+    const weight = id === 'coin_wave' ? 1 : 2;
     for (let w = 0; w < weight; w++) {
       weightedPool.push(id);
     }
@@ -246,7 +281,6 @@ export function pickNextPattern(
   const patternId = weightedPool[pickIndex];
   const nextRecent = [...recentPatterns, patternId].slice(-3);
 
-  // Chained 2-module wave chance ramps gently from 22% early up to 48% in Sector 3+
   const chainChance = scoreMeters < 80 ? 0 : Math.min(0.48, 0.22 + (scoreMeters / 1200) * 0.26);
   const startsChain = !isChasmPattern(patternId) && rng() < chainChance;
 
@@ -255,4 +289,69 @@ export function pickNextPattern(
     nextRecent,
     startsChain,
   };
+}
+
+export function getLocalDateKey(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function getPreviousDateKey(dateKey: string): string {
+  const parts = dateKey.split('-').map((v) => parseInt(v, 10));
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return '';
+  const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+  dt.setDate(dt.getDate() - 1);
+  return getLocalDateKey(dt);
+}
+
+export function computeDailyClaimState(
+  daily: DailyRewardState,
+  todayKey: string = getLocalDateKey()
+): {
+  canClaim: boolean;
+  nextStreak: number;
+  rewardCredits: number;
+} {
+  if (daily.lastClaimDate === todayKey) {
+    const currentStreak = Math.max(1, daily.streak);
+    return {
+      canClaim: false,
+      nextStreak: currentStreak,
+      rewardCredits: getDailyRewardCredits(currentStreak),
+    };
+  }
+  const yesterdayKey = getPreviousDateKey(todayKey);
+  const nextStreak = daily.lastClaimDate === yesterdayKey ? Math.max(1, daily.streak) + 1 : 1;
+  return {
+    canClaim: true,
+    nextStreak,
+    rewardCredits: getDailyRewardCredits(nextStreak),
+  };
+}
+
+export function evaluateMilestoneSkins(
+  progress: PlayerProgress,
+  runScore: number = 0,
+  runMode: RunMode = 'classic'
+): SkinId[] {
+  const newlyUnlocked: SkinId[] = [];
+  const checkAndAdd = (id: SkinId, condition: boolean) => {
+    if (condition && !progress.unlockedSkins.includes(id)) {
+      newlyUnlocked.push(id);
+    }
+  };
+
+  const bestClassicOrRun = Math.max(progress.highScore, runScore);
+  const bestTurboOrRun = Math.max(
+    progress.turboHighScore,
+    runMode === 'turbo' ? runScore : 0
+  );
+
+  checkAndAdd('apex_chrome', bestClassicOrRun >= 1500);
+  checkAndAdd('boss_slayer', progress.career.totalBosses >= 3);
+  checkAndAdd('turbo_phantom', bestTurboOrRun >= 800);
+
+  return newlyUnlocked;
 }

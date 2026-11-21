@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   GAME_CONFIG,
   getBlasterCooldownMs,
+  getEmpCooldownMs,
   getJetpackMaxFuelMs,
   getJetpackMaxRiseSpeed,
   getMagnetRadiusPx,
@@ -52,6 +53,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public overdriveCharge: number = 0;
   public overdriveRemaining: number = 0;
   public overdriveMax: number = GAME_CONFIG.OVERDRIVE_DURATION_MS;
+
+  public empWaveLevel: number = 0;
+  public empCooldownRemaining: number = 0;
+  public empCooldownMax: number = 0;
 
   public doubleJumpsUsed: number = 0;
   public overdrivesTriggered: number = 0;
@@ -184,11 +189,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public setUpgradeLevels(
     blasterLevel: number,
     magnetLevel: number,
-    jetpackLevel: number = 0
+    jetpackLevel: number = 0,
+    empWaveLevel: number = 0
   ) {
     this.blasterLevel = blasterLevel;
     this.magnetLevel = magnetLevel;
     this.jetpackLevel = jetpackLevel;
+    this.empWaveLevel = empWaveLevel;
+    this.empCooldownMax = getEmpCooldownMs(empWaveLevel);
+    if (this.empCooldownMax <= 0) {
+      this.empCooldownRemaining = 0;
+    } else {
+      this.empCooldownRemaining = Math.min(this.empCooldownRemaining, this.empCooldownMax);
+    }
     this.jetpackFuelMs = Math.min(this.jetpackFuelMs, this.getMaxJetpackFuelMs());
   }
 
@@ -199,6 +212,30 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public refillJetpack() {
     this.jetpackFuelMs = computeRefilledFuel(this.jetpackFuelMs, this.getMaxJetpackFuelMs());
     this.hasDoubleJump = true;
+  }
+
+  public canTriggerEmp(): boolean {
+    return !this.isDead && this.empWaveLevel > 0 && this.empCooldownRemaining <= 0;
+  }
+
+  public consumeEmpCooldown(): boolean {
+    if (!this.canTriggerEmp()) return false;
+    this.empCooldownRemaining = this.empCooldownMax;
+    this.onBuffChange();
+    return true;
+  }
+
+  public launchFromJumpPad() {
+    if (!this.body || this.isDead) return;
+    this.setVelocityY(GAME_CONFIG.JUMP_PAD_VELOCITY);
+    this.isJumping = true;
+    this.isGliding = false;
+    this.hasDoubleJump = true;
+    this.jumpHoldTimer = GAME_CONFIG.MAX_JUMP_HOLD_MS;
+    this.squashX = 0.78;
+    this.squashY = 1.24;
+    this.burstParticles?.explode(16, this.x, this.y + 24);
+    soundEngine.playJumpPad();
   }
 
   public setSkin(skinId: SkinId) {
@@ -588,6 +625,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
+    if (this.empCooldownRemaining > 0) {
+      this.empCooldownRemaining = Math.max(0, this.empCooldownRemaining - delta);
+      if (this.empCooldownRemaining === 0) {
+        buffChanged = true;
+      }
+    }
+
     if (buffChanged) {
       this.onBuffChange();
     }
@@ -694,6 +738,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.magnetRemaining = 0;
     this.overdriveRemaining = 0;
     this.overdriveCharge = 0;
+    this.empCooldownRemaining = 0;
     this.doubleJumpsUsed = 0;
     this.overdrivesTriggered = 0;
 

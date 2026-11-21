@@ -3,9 +3,10 @@ import GameOver from './components/GameOver.tsx';
 import HUD, { MissionToastData } from './components/HUD.tsx';
 import Menu from './components/Menu.tsx';
 import PauseModal from './components/PauseModal.tsx';
-import UpgradesModal from './components/UpgradesModal.tsx';
+import UpgradesModal, { UpgradesModalTab } from './components/UpgradesModal.tsx';
 import {
   GAME_CONFIG,
+  getEmpCooldownMs,
   getUpgradeCost,
   SECTORS_PALETTE,
   SKINS_CATALOG,
@@ -20,28 +21,37 @@ import {
   MissionType,
   OrientationMode,
   PlayerProgress,
+  RunMode,
   SkinId,
   UpgradeId,
 } from './types.ts';
+import { computeDailyClaimState } from './utils/gameRules.ts';
 import { soundEngine } from './utils/sound.ts';
 import {
+  claimDailyReward,
   loadProgress,
+  recordRunOutcome,
   refreshCompletedMissions,
   saveProgress,
   unlockAndEquipSkin,
   updateUpgradeLevel,
 } from './utils/storage.ts';
 
-const EMPTY_BUFFS: ActiveBuffs = {
-  shieldRemaining: 0,
-  shieldMax: 0,
-  magnetRemaining: 0,
-  magnetMax: 0,
-  overdriveCharge: 0,
-  overdriveActive: false,
-  overdriveRemaining: 0,
-  overdriveMax: GAME_CONFIG.OVERDRIVE_DURATION_MS,
-};
+function createBaseBuffs(empWaveLevel: number): ActiveBuffs {
+  return {
+    shieldRemaining: 0,
+    shieldMax: 0,
+    magnetRemaining: 0,
+    magnetMax: 0,
+    overdriveCharge: 0,
+    overdriveActive: false,
+    overdriveRemaining: 0,
+    overdriveMax: GAME_CONFIG.OVERDRIVE_DURATION_MS,
+    empUnlocked: empWaveLevel > 0,
+    empCooldownRemaining: 0,
+    empCooldownMax: getEmpCooldownMs(empWaveLevel),
+  };
+}
 
 interface RunMetricSnapshot {
   distance: number;
@@ -69,19 +79,30 @@ const App: React.FC = () => {
   });
 
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
-  const [showUpgrades, setShowUpgrades] = useState(false);
+  const [upgradesModalTab, setUpgradesModalTab] = useState<UpgradesModalTab | null>(null);
 
   const [score, setScore] = useState(0);
   const [runCredits, setRunCredits] = useState(0);
   const [dronesDestroyed, setDronesDestroyed] = useState(0);
+  const [bossesDefeated, setBossesDefeated] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [bossActive, setBossActive] = useState(false);
+  const [bossHp, setBossHp] = useState(0);
+  const [bossMaxHp, setBossMaxHp] = useState(0);
+  const [activeRunMode, setActiveRunMode] = useState<RunMode>(() => progress.runMode);
+
   const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
   const [sectorNumber, setSectorNumber] = useState(1);
   const [sectorName, setSectorName] = useState(SECTORS_PALETTE[0].name);
   const [comboCount, setComboCount] = useState(0);
   const [comboMultiplier, setComboMultiplier] = useState(1);
-  const [buffs, setBuffs] = useState<ActiveBuffs>(EMPTY_BUFFS);
+  const [buffs, setBuffs] = useState<ActiveBuffs>(() =>
+    createBaseBuffs(progress.upgrades.empWave)
+  );
   const [isNewRecord, setIsNewRecord] = useState(false);
+  const [newlyUnlockedSkins, setNewlyUnlockedSkins] = useState<SkinId[]>([]);
   const [missionToast, setMissionToast] = useState<MissionToastData | null>(null);
+  const [dailyClaimedFeedback, setDailyClaimedFeedback] = useState<number | null>(null);
 
   const { showRotateHint, applyOrientation, dismissRotateHint } = useOrientation();
   const { needRefresh, isUpdating, applyUpdate } = usePWAUpdate();
@@ -90,11 +111,15 @@ const App: React.FC = () => {
   progressRef.current = progress;
   const prevRunMetricsRef = useRef<RunMetricSnapshot>({ ...ZERO_METRICS });
   const toastTimerRef = useRef<number | null>(null);
+  const dailyFeedbackTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       if (toastTimerRef.current !== null) {
         window.clearTimeout(toastTimerRef.current);
+      }
+      if (dailyFeedbackTimerRef.current !== null) {
+        window.clearTimeout(dailyFeedbackTimerRef.current);
       }
     };
   }, []);
@@ -190,21 +215,36 @@ const App: React.FC = () => {
     });
     const canUnlockSkin = SKINS_CATALOG.some(
       (skin) =>
-        !progress.unlockedSkins.includes(skin.id) && progress.totalCredits >= skin.cost
+        skin.unlockType === 'credits' &&
+        !progress.unlockedSkins.includes(skin.id) &&
+        progress.totalCredits >= skin.cost
     );
     return canUpgrade || canUnlockSkin;
   }, [progress]);
 
+  const dailyClaimState = useMemo(
+    () => computeDailyClaimState(progress.dailyReward),
+    [progress.dailyReward]
+  );
+
   const handleGameEvent = useCallback(
     (event: string, data: Record<string, unknown>) => {
       switch (event) {
-        case 'GAME_START':
+        case 'GAME_START': {
+          const startedMode: RunMode = data?.runMode === 'turbo' ? 'turbo' : 'classic';
           prevRunMetricsRef.current = { ...ZERO_METRICS };
           setMissionToast(null);
+          setNewlyUnlockedSkins([]);
+          setActiveRunMode(startedMode);
           setGameState(GameState.PLAYING);
           setScore(0);
           setRunCredits(0);
           setDronesDestroyed(0);
+          setBossesDefeated(0);
+          setMaxCombo(0);
+          setBossActive(false);
+          setBossHp(0);
+          setBossMaxHp(0);
           setSpeedMultiplier(
             typeof data?.speedMultiplier === 'number' ? data.speedMultiplier : 1.0
           );
@@ -215,8 +255,9 @@ const App: React.FC = () => {
           setComboCount(0);
           setComboMultiplier(1);
           setIsNewRecord(false);
-          setBuffs(EMPTY_BUFFS);
+          setBuffs(createBaseBuffs(progressRef.current.upgrades.empWave));
           break;
+        }
 
         case 'UPDATE_RUN': {
           const nextScore = typeof data?.score === 'number' ? data.score : undefined;
@@ -238,6 +279,11 @@ const App: React.FC = () => {
           if (typeof data?.sectorName === 'string') setSectorName(data.sectorName);
           if (typeof data?.comboCount === 'number') setComboCount(data.comboCount);
           if (typeof data?.comboMultiplier === 'number') setComboMultiplier(data.comboMultiplier);
+          if (typeof data?.maxCombo === 'number') setMaxCombo(data.maxCombo);
+          if (typeof data?.bossesDefeated === 'number') setBossesDefeated(data.bossesDefeated);
+          if (typeof data?.bossActive === 'boolean') setBossActive(data.bossActive);
+          if (typeof data?.bossHp === 'number') setBossHp(data.bossHp);
+          if (typeof data?.bossMaxHp === 'number') setBossMaxHp(data.bossMaxHp);
 
           applyMissionDeltas(
             {
@@ -267,6 +313,10 @@ const App: React.FC = () => {
               typeof data?.overdriveMax === 'number'
                 ? data.overdriveMax
                 : GAME_CONFIG.OVERDRIVE_DURATION_MS,
+            empUnlocked: Boolean(data?.empUnlocked),
+            empCooldownRemaining:
+              typeof data?.empCooldownRemaining === 'number' ? data.empCooldownRemaining : 0,
+            empCooldownMax: typeof data?.empCooldownMax === 'number' ? data.empCooldownMax : 0,
           });
           break;
 
@@ -287,13 +337,23 @@ const App: React.FC = () => {
             typeof data?.platformsLanded === 'number' ? data.platformsLanded : 0;
           const finalOverdrives =
             typeof data?.overdrivesTriggered === 'number' ? data.overdrivesTriggered : 0;
+          const finalBosses =
+            typeof data?.bossesDefeated === 'number' ? data.bossesDefeated : 0;
+          const finalMaxCombo = typeof data?.maxCombo === 'number' ? data.maxCombo : 0;
+          const finishedMode: RunMode = data?.runMode === 'turbo' ? 'turbo' : 'classic';
 
           setScore(finalScore);
           setRunCredits(earnedCredits);
           setDronesDestroyed(finalDrones);
+          setBossesDefeated(finalBosses);
+          setMaxCombo(finalMaxCombo);
+          setBossActive(false);
+          setBossHp(0);
+          setBossMaxHp(0);
+          setActiveRunMode(finishedMode);
           setComboCount(0);
           setComboMultiplier(1);
-          setBuffs(EMPTY_BUFFS);
+          setBuffs(createBaseBuffs(progressRef.current.upgrades.empWave));
           setGameState(GameState.GAME_OVER);
 
           const afterMissionProgress = applyMissionDeltas(
@@ -308,17 +368,19 @@ const App: React.FC = () => {
             false
           );
 
-          const beatRecord = finalScore > afterMissionProgress.highScore;
-          setIsNewRecord(beatRecord);
+          const outcome = recordRunOutcome(afterMissionProgress, {
+            score: finalScore,
+            runMode: finishedMode,
+            earnedCredits,
+            dronesDestroyed: finalDrones,
+            bossesDefeated: finalBosses,
+            maxCombo: finalMaxCombo,
+          });
 
-          const updated: PlayerProgress = {
-            ...afterMissionProgress,
-            highScore: beatRecord ? finalScore : afterMissionProgress.highScore,
-            totalCredits: afterMissionProgress.totalCredits + earnedCredits,
-          };
-          saveProgress(updated);
-          progressRef.current = updated;
-          setProgress(updated);
+          setIsNewRecord(outcome.beatRecord);
+          setNewlyUnlockedSkins(outcome.newlyUnlockedSkins);
+          progressRef.current = outcome.nextProgress;
+          setProgress(outcome.nextProgress);
           break;
         }
       }
@@ -335,6 +397,7 @@ const App: React.FC = () => {
       muted: nextMuted,
     };
     saveProgress(updated);
+    progressRef.current = updated;
     setProgress(updated);
   };
 
@@ -345,29 +408,70 @@ const App: React.FC = () => {
       orientationMode: nextMode,
     };
     saveProgress(updated);
+    progressRef.current = updated;
     setProgress(updated);
     void applyOrientation(nextMode, true);
   };
 
+  const handleSelectRunMode = (mode: RunMode) => {
+    soundEngine.unlock();
+    if (progress.runMode === mode) return;
+    const updated: PlayerProgress = {
+      ...progress,
+      runMode: mode,
+    };
+    saveProgress(updated);
+    progressRef.current = updated;
+    setProgress(updated);
+    setActiveRunMode(mode);
+    window.dispatchEvent(new CustomEvent('PHASER_SYNC_PROGRESS'));
+  };
+
+  const handleClaimDaily = () => {
+    soundEngine.unlock();
+    const claimed = claimDailyReward(progressRef.current);
+    if (!claimed) return;
+    soundEngine.playDailyClaim();
+    progressRef.current = claimed.nextProgress;
+    setProgress(claimed.nextProgress);
+    setDailyClaimedFeedback(claimed.rewardCredits);
+    if (dailyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(dailyFeedbackTimerRef.current);
+    }
+    dailyFeedbackTimerRef.current = window.setTimeout(() => {
+      setDailyClaimedFeedback(null);
+      dailyFeedbackTimerRef.current = null;
+    }, 3500);
+  };
+
+  const handleTriggerEmp = () => {
+    soundEngine.unlock();
+    window.dispatchEvent(new CustomEvent('PHASER_EMP'));
+  };
+
   const startGame = () => {
     soundEngine.unlock();
-    setShowUpgrades(false);
+    setUpgradesModalTab(null);
     const rotated = refreshCompletedMissions(progressRef.current);
     progressRef.current = rotated;
     setProgress(rotated);
     if (rotated.orientationMode === 'landscape') {
       void applyOrientation('landscape', false);
     }
-    window.dispatchEvent(new CustomEvent('PHASER_START'));
+    window.dispatchEvent(
+      new CustomEvent('PHASER_START', { detail: { runMode: rotated.runMode } })
+    );
   };
 
   const restartGame = () => {
     soundEngine.unlock();
-    setShowUpgrades(false);
+    setUpgradesModalTab(null);
     const rotated = refreshCompletedMissions(progressRef.current);
     progressRef.current = rotated;
     setProgress(rotated);
-    window.dispatchEvent(new CustomEvent('PHASER_RESTART'));
+    window.dispatchEvent(
+      new CustomEvent('PHASER_RESTART', { detail: { runMode: activeRunMode } })
+    );
   };
 
   const pauseGame = () => {
@@ -379,8 +483,9 @@ const App: React.FC = () => {
   };
 
   const quitToMenu = () => {
-    setShowUpgrades(false);
+    setUpgradesModalTab(null);
     setMissionToast(null);
+    setNewlyUnlockedSkins([]);
     prevRunMetricsRef.current = { ...ZERO_METRICS };
     const rotated = refreshCompletedMissions(progressRef.current);
     saveProgress(rotated);
@@ -397,16 +502,22 @@ const App: React.FC = () => {
     const next = updateUpgradeLevel(progress, id, cost);
     if (next) {
       soundEngine.playUpgrade();
+      progressRef.current = next;
       setProgress(next);
       window.dispatchEvent(new CustomEvent('PHASER_SYNC_PROGRESS'));
     }
   };
 
-  const handleUnlockOrEquipSkin = (skinId: SkinId, cost: number) => {
+  const handleUnlockOrEquipSkin = (
+    skinId: SkinId,
+    cost: number,
+    isMilestoneLocked: boolean = false
+  ) => {
     soundEngine.unlock();
-    const next = unlockAndEquipSkin(progress, skinId, cost);
+    const next = unlockAndEquipSkin(progress, skinId, cost, isMilestoneLocked);
     if (next) {
       soundEngine.playUpgrade();
+      progressRef.current = next;
       setProgress(next);
       window.dispatchEvent(new CustomEvent('PHASER_SYNC_PROGRESS'));
     }
@@ -419,16 +530,24 @@ const App: React.FC = () => {
       {gameState === GameState.MENU && (
         <Menu
           highScore={progress.highScore}
+          turboHighScore={progress.turboHighScore}
           totalCredits={progress.totalCredits}
           muted={progress.muted}
           orientationMode={progress.orientationMode}
+          runMode={progress.runMode}
           showRotateHint={showRotateHint}
           hasUpdate={needRefresh}
           isUpdatingApp={isUpdating}
           canAffordUpgrade={canAffordUpgrade}
+          dailyCanClaim={dailyClaimState.canClaim}
+          dailyStreak={dailyClaimState.nextStreak}
+          dailyRewardCredits={dailyClaimState.rewardCredits}
+          dailyClaimedFeedback={dailyClaimedFeedback}
           missions={progress.missions}
           onStart={startGame}
-          onOpenUpgrades={() => setShowUpgrades(true)}
+          onSelectRunMode={handleSelectRunMode}
+          onClaimDaily={handleClaimDaily}
+          onOpenUpgrades={(initialTab = 'upgrades') => setUpgradesModalTab(initialTab)}
           onToggleMute={toggleMute}
           onToggleOrientation={toggleOrientationMode}
           onDismissRotateHint={dismissRotateHint}
@@ -443,13 +562,18 @@ const App: React.FC = () => {
           speedMultiplier={speedMultiplier}
           sectorNumber={sectorNumber}
           sectorName={sectorName}
+          runMode={activeRunMode}
           comboCount={comboCount}
           comboMultiplier={comboMultiplier}
+          bossActive={bossActive}
+          bossHp={bossHp}
+          bossMaxHp={bossMaxHp}
           buffs={buffs}
           missionToast={missionToast}
           muted={progress.muted}
           onToggleMute={toggleMute}
           onPause={pauseGame}
+          onTriggerEmp={handleTriggerEmp}
         />
       )}
 
@@ -468,24 +592,29 @@ const App: React.FC = () => {
       {gameState === GameState.GAME_OVER && (
         <GameOver
           score={score}
-          highScore={progress.highScore}
+          highScore={activeRunMode === 'turbo' ? progress.turboHighScore : progress.highScore}
+          runMode={activeRunMode}
           runCredits={runCredits}
           totalCredits={progress.totalCredits}
           dronesDestroyed={dronesDestroyed}
+          bossesDefeated={bossesDefeated}
+          maxCombo={maxCombo}
           isNewRecord={isNewRecord}
+          newlyUnlockedSkins={newlyUnlockedSkins}
           missions={progress.missions}
           onRestart={restartGame}
-          onOpenUpgrades={() => setShowUpgrades(true)}
+          onOpenUpgrades={() => setUpgradesModalTab('upgrades')}
           onQuitToMenu={quitToMenu}
         />
       )}
 
-      {showUpgrades && (
+      {upgradesModalTab !== null && (
         <UpgradesModal
           progress={progress}
+          initialTab={upgradesModalTab}
           onBuyUpgrade={handleBuyUpgrade}
           onUnlockOrEquipSkin={handleUnlockOrEquipSkin}
-          onClose={() => setShowUpgrades(false)}
+          onClose={() => setUpgradesModalTab(null)}
         />
       )}
     </div>

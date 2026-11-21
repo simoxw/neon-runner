@@ -5,6 +5,7 @@ export const GAME_CONFIG = {
   PLAYER_JUMP_INITIAL: -475,
   PLAYER_JUMP_HOLD_ACCEL: -1450,
   DOUBLE_JUMP_VELOCITY: -510,
+  JUMP_PAD_VELOCITY: -735,
   JETPACK_MAX_FUEL_MS: 950,
   JETPACK_FUEL_PER_LEVEL_MS: 200,
   JETPACK_THRUST_ACCEL: -1950,
@@ -18,11 +19,16 @@ export const GAME_CONFIG = {
   BASE_SPEED: 420,
   MAX_SPEED: 860,
   SPEED_INCREMENT: 20,
+  TURBO_BASE_SPEED: 560,
+  TURBO_MAX_SPEED: 980,
+  TURBO_SPEED_INCREMENT: 24,
+  TURBO_CREDIT_MULTIPLIER: 1.5,
   DIFFICULTY_INTERVAL_METERS: 220,
   GROUND_HEIGHT: 96,
   GROUND_HEIGHT_COMPACT: 72,
   POOL_SIZE: 16,
   POWERUP_INTERVAL_METERS: 180,
+  MAGNET_DROP_PROBABILITY: 0.7,
   OVERDRIVE_DURATION_MS: 5500,
   OVERDRIVE_SPEED_BONUS: 240,
   OVERDRIVE_CHARGE_PER_COIN: 1,
@@ -31,13 +37,24 @@ export const GAME_CONFIG = {
   OVERDRIVE_CHARGE_PER_RING: 4,
   MISSILE_SPEED_MULTIPLIER: 1.2,
   SECTOR_INTERVAL_METERS: 300,
+  BOSS_INTERVAL_METERS: 600,
   LASER_WARN_MS: 950,
   LASER_ACTIVE_MS: 1150,
   COMBO_DECAY_MS: 2800,
   COMBO_TIER_2_THRESHOLD: 6,
   COMBO_TIER_3_THRESHOLD: 14,
   DUAL_PULSE_MIN_LEVEL: 3,
+  EMP_BASE_COOLDOWN_MS: 22000,
+  EMP_COOLDOWN_STEP_MS: 2400,
 };
+
+export const DAILY_REWARD_SCHEDULE = [25, 35, 50, 65, 80, 100, 120];
+
+export function getDailyRewardCredits(streak: number): number {
+  const safeStreak = Math.max(1, Math.floor(streak));
+  const idx = Math.min(DAILY_REWARD_SCHEDULE.length - 1, safeStreak - 1);
+  return DAILY_REWARD_SCHEDULE[idx];
+}
 
 export function getGroundHeight(viewportHeight: number): number {
   return viewportHeight < 480 ? GAME_CONFIG.GROUND_HEIGHT_COMPACT : GAME_CONFIG.GROUND_HEIGHT;
@@ -86,6 +103,8 @@ export interface SkinConfig {
   id: SkinId;
   name: string;
   cost: number;
+  unlockType: 'free' | 'credits' | 'milestone';
+  milestoneLabel?: string;
   primaryHex: string;
   accentHex: string;
   bodyTint: number;
@@ -98,6 +117,7 @@ export const SKINS_CATALOG: SkinConfig[] = [
     id: 'cyan',
     name: 'Cyber Cyan',
     cost: 0,
+    unlockType: 'free',
     primaryHex: '#00f3ff',
     accentHex: '#ff2a6d',
     bodyTint: 0xffffff,
@@ -108,6 +128,7 @@ export const SKINS_CATALOG: SkinConfig[] = [
     id: 'crimson',
     name: 'Crimson Striker',
     cost: 60,
+    unlockType: 'credits',
     primaryHex: '#ff2a6d',
     accentHex: '#ffc857',
     bodyTint: 0xff7096,
@@ -118,6 +139,7 @@ export const SKINS_CATALOG: SkinConfig[] = [
     id: 'solar',
     name: 'Solar Gold',
     cost: 110,
+    unlockType: 'credits',
     primaryHex: '#ffc857',
     accentHex: '#ffffff',
     bodyTint: 0xffe082,
@@ -128,6 +150,7 @@ export const SKINS_CATALOG: SkinConfig[] = [
     id: 'emerald',
     name: 'Toxic Emerald',
     cost: 160,
+    unlockType: 'credits',
     primaryHex: '#00ff9d',
     accentHex: '#00f3ff',
     bodyTint: 0x80ffcb,
@@ -138,11 +161,48 @@ export const SKINS_CATALOG: SkinConfig[] = [
     id: 'violet',
     name: 'Phantom Violet',
     cost: 220,
+    unlockType: 'credits',
     primaryHex: '#c084fc',
     accentHex: '#f472b6',
     bodyTint: 0xd8b4fe,
     trailTint: 0xc084fc,
     bulletTint: 0xe879f9,
+  },
+  {
+    id: 'apex_chrome',
+    name: 'Apex Chrome',
+    cost: 0,
+    unlockType: 'milestone',
+    milestoneLabel: 'Raggiungi 1.500m in una corsa',
+    primaryHex: '#f8fafc',
+    accentHex: '#00f3ff',
+    bodyTint: 0xe2e8f0,
+    trailTint: 0x7dd3fc,
+    bulletTint: 0xe0f2fe,
+  },
+  {
+    id: 'boss_slayer',
+    name: 'Boss Slayer',
+    cost: 0,
+    unlockType: 'milestone',
+    milestoneLabel: 'Abbatti 3 Boss Drone in carriera',
+    primaryHex: '#ff5e3a',
+    accentHex: '#ffc857',
+    bodyTint: 0xff9e7d,
+    trailTint: 0xff5e3a,
+    bulletTint: 0xffb347,
+  },
+  {
+    id: 'turbo_phantom',
+    name: 'Turbo Phantom',
+    cost: 0,
+    unlockType: 'milestone',
+    milestoneLabel: 'Raggiungi 800m in Corsa Turbo',
+    primaryHex: '#38bdf8',
+    accentHex: '#f43f5e',
+    bodyTint: 0x7dd3fc,
+    trailTint: 0xf43f5e,
+    bulletTint: 0x38bdf8,
   },
 ];
 
@@ -281,9 +341,20 @@ export const UPGRADES_CATALOG: UpgradeConfig[] = [
       `${(getJetpackMaxFuelMs(lvl) / 1000).toFixed(2)}s`,
   },
   {
+    id: 'empWave',
+    name: 'Onda EMP',
+    description: 'Gadget attivo (E / HUD): spazza droni, missili, danneggia Boss e blocca i laser.',
+    maxLevel: 5,
+    baseCost: 45,
+    costStep: 35,
+    unit: 's',
+    formatValue: (lvl: number) =>
+      lvl <= 0 ? 'Bloccata' : `${(getEmpCooldownMs(lvl) / 1000).toFixed(1)}s rec.`,
+  },
+  {
     id: 'creditMultiplier',
     name: 'Moltiplicatore Crediti',
-    description: 'Bonus sui crediti raccolti e sui droni abbattuti.',
+    description: 'Bonus sui crediti raccolti, sui droni e sui Boss abbattuti.',
     maxLevel: 5,
     baseCost: 40,
     costStep: 35,
@@ -324,6 +395,12 @@ export function getJetpackMaxFuelMs(level: number): number {
 export function getJetpackMaxRiseSpeed(level: number): number {
   const clamped = Math.max(0, Math.min(5, level));
   return GAME_CONFIG.JETPACK_MAX_RISE_SPEED - clamped * GAME_CONFIG.JETPACK_RISE_PER_LEVEL;
+}
+
+export function getEmpCooldownMs(level: number): number {
+  if (level <= 0) return 0;
+  const clamped = Math.max(1, Math.min(5, level));
+  return Math.max(11000, GAME_CONFIG.EMP_BASE_COOLDOWN_MS - (clamped - 1) * GAME_CONFIG.EMP_COOLDOWN_STEP_MS);
 }
 
 export function getCreditMultiplier(level: number): number {

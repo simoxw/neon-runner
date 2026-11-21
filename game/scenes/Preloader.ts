@@ -69,6 +69,15 @@ export class Preloader extends Phaser.Scene {
         repeat: -1,
       });
     }
+
+    if (!this.anims.exists('anim_boss_drone')) {
+      this.anims.create({
+        key: 'anim_boss_drone',
+        frames: [{ key: 'boss_drone_0' }, { key: 'boss_drone_1' }],
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
   }
 
   private createProceduralTextures() {
@@ -83,6 +92,7 @@ export class Preloader extends Phaser.Scene {
     this.createPowerupTextures();
     this.createMissileTextures();
     this.createLaserAndRingTextures();
+    this.createExpansionTextures();
     this.createEnvironmentTextures();
     this.createParticleAndBulletTextures();
   }
@@ -1057,6 +1067,132 @@ export class Preloader extends Phaser.Scene {
         grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, 54, 3);
+        canvas.refresh();
+      }
+    }
+  }
+
+  private createExpansionTextures() {
+    if (!this.textures.exists('jump_pad')) {
+      const canvas = this.textures.createCanvas('jump_pad', 60, 22);
+      if (canvas) {
+        const ctx = canvas.context;
+        // 2.5D Trapezoid base housing
+        ctx.fillStyle = '#181f3d';
+        ctx.beginPath();
+        ctx.moveTo(4, 22);
+        ctx.lineTo(10, 12);
+        ctx.lineTo(50, 12);
+        ctx.lineTo(56, 22);
+        ctx.closePath();
+        ctx.fill();
+
+        // Piston spring gap glow
+        ctx.fillStyle = 'rgba(0, 243, 255, 0.35)';
+        ctx.fillRect(14, 9, 32, 4);
+
+        // Luminous amber/cyan bounce deck top
+        const topGrad = ctx.createLinearGradient(8, 2, 52, 10);
+        topGrad.addColorStop(0, '#00f3ff');
+        topGrad.addColorStop(0.5, '#00ff9d');
+        topGrad.addColorStop(1, '#ffc857');
+        ctx.fillStyle = topGrad;
+        ctx.beginPath();
+        ctx.moveTo(8, 10);
+        ctx.lineTo(14, 3);
+        ctx.lineTo(46, 3);
+        ctx.lineTo(52, 10);
+        ctx.closePath();
+        ctx.fill();
+
+        // Upward chevron glyphs
+        ctx.strokeStyle = '#06070d';
+        ctx.lineWidth = 2;
+        for (const cx of [22, 30, 38]) {
+          ctx.beginPath();
+          ctx.moveTo(cx - 4, 8);
+          ctx.lineTo(cx, 4.5);
+          ctx.lineTo(cx + 4, 8);
+          ctx.stroke();
+        }
+        canvas.refresh();
+      }
+    }
+
+    [0, 1].forEach((frame) => {
+      const key = `boss_drone_${frame}`;
+      if (this.textures.exists(key)) return;
+      const canvas = this.textures.createCanvas(key, 116, 84);
+      if (!canvas) return;
+      const ctx = canvas.context;
+
+      // Twin side hover thruster flames
+      const flameH = frame === 0 ? 14 : 9;
+      ctx.fillStyle = '#ff5e3a';
+      ctx.fillRect(22, 66, 12, flameH);
+      ctx.fillRect(82, 66, 12, flameH);
+      ctx.fillStyle = '#ffc857';
+      ctx.fillRect(25, 66, 6, flameH - 3);
+      ctx.fillRect(85, 66, 6, flameH - 3);
+
+      // Shadowed 2.5D armored dreadnought hull
+      const hullGrad = ctx.createLinearGradient(12, 12, 104, 70);
+      hullGrad.addColorStop(0, '#2c2359');
+      hullGrad.addColorStop(0.55, '#191438');
+      hullGrad.addColorStop(1, '#0c091f');
+      ctx.fillStyle = hullGrad;
+      ctx.beginPath();
+      ctx.moveTo(8, 42);
+      ctx.lineTo(28, 14);
+      ctx.lineTo(88, 14);
+      ctx.lineTo(108, 42);
+      ctx.lineTo(86, 68);
+      ctx.lineTo(30, 68);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glowing crimson trim & bevel
+      ctx.strokeStyle = '#ff2a6d';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.fillRect(30, 16, 56, 3);
+
+      // Twin armored wing pods
+      ctx.fillStyle = '#20264c';
+      ctx.fillRect(14, 30, 22, 24);
+      ctx.fillRect(80, 30, 22, 24);
+      ctx.fillStyle = '#ffc857';
+      ctx.fillRect(16, 28, 18, 4);
+      ctx.fillRect(82, 28, 18, 4);
+
+      // Central menacing core optic
+      ctx.fillStyle = frame === 0 ? '#ff2a6d' : '#ff8a00';
+      ctx.beginPath();
+      ctx.arc(52, 42, frame === 0 ? 14 : 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff380';
+      ctx.beginPath();
+      ctx.arc(49, 39, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Forward plasma barrel
+      ctx.fillStyle = '#00f3ff';
+      ctx.fillRect(4, 39, 14, 6);
+      canvas.refresh();
+    });
+
+    if (!this.textures.exists('emp_wave_ring')) {
+      const canvas = this.textures.createCanvas('emp_wave_ring', 160, 160);
+      if (canvas) {
+        const ctx = canvas.context;
+        const grad = ctx.createRadialGradient(80, 80, 48, 80, 80, 78);
+        grad.addColorStop(0, 'rgba(0, 243, 255, 0)');
+        grad.addColorStop(0.65, 'rgba(0, 243, 255, 0.45)');
+        grad.addColorStop(0.85, 'rgba(125, 211, 252, 0.9)');
+        grad.addColorStop(1, 'rgba(0, 243, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 160, 160);
         canvas.refresh();
       }
     }

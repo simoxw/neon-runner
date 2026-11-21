@@ -1,20 +1,40 @@
 import React from 'react';
-import { Check, RefreshCw, RotateCw, Smartphone, Volume2, VolumeX, Wrench, X } from 'lucide-react';
-import { ActiveMission, OrientationMode } from '../types';
+import {
+  Check,
+  Gift,
+  RefreshCw,
+  RotateCw,
+  Smartphone,
+  Trophy,
+  Volume2,
+  VolumeX,
+  Wrench,
+  X,
+  Zap,
+} from 'lucide-react';
+import { ActiveMission, OrientationMode, RunMode } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface MenuProps {
   highScore: number;
+  turboHighScore: number;
   totalCredits: number;
   muted: boolean;
   orientationMode: OrientationMode;
+  runMode: RunMode;
   showRotateHint: boolean;
   hasUpdate: boolean;
   isUpdatingApp: boolean;
   canAffordUpgrade: boolean;
+  dailyCanClaim: boolean;
+  dailyStreak: number;
+  dailyRewardCredits: number;
+  dailyClaimedFeedback: number | null;
   missions: ActiveMission[];
   onStart: () => void;
-  onOpenUpgrades: () => void;
+  onSelectRunMode: (mode: RunMode) => void;
+  onClaimDaily: () => void;
+  onOpenUpgrades: (initialTab?: 'upgrades' | 'skins' | 'career') => void;
   onToggleMute: () => void;
   onToggleOrientation: () => void;
   onDismissRotateHint: () => void;
@@ -23,15 +43,23 @@ interface MenuProps {
 
 const Menu: React.FC<MenuProps> = ({
   highScore,
+  turboHighScore,
   totalCredits,
   muted,
   orientationMode,
+  runMode,
   showRotateHint,
   hasUpdate,
   isUpdatingApp,
   canAffordUpgrade,
+  dailyCanClaim,
+  dailyStreak,
+  dailyRewardCredits,
+  dailyClaimedFeedback,
   missions,
   onStart,
+  onSelectRunMode,
+  onClaimDaily,
   onOpenUpgrades,
   onToggleMute,
   onToggleOrientation,
@@ -39,11 +67,21 @@ const Menu: React.FC<MenuProps> = ({
   onApplyUpdate,
 }) => {
   const isLandscapeLocked = orientationMode === 'landscape';
+  const activeModeRecord = runMode === 'turbo' ? turboHighScore : highScore;
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-between overflow-y-auto bg-[#06070d]/72 px-4 py-4 backdrop-blur-[2px] sm:p-6 [@media(max-height:500px)]:py-2">
       <div className="flex w-full max-w-3xl flex-wrap items-center justify-end gap-2">
         <PWAInstallButton />
+
+        <button
+          type="button"
+          onClick={() => onOpenUpgrades('career')}
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+        >
+          <Trophy className="h-4 w-4 text-amber-400" />
+          <span>Carriera</span>
+        </button>
 
         <button
           type="button"
@@ -121,10 +159,12 @@ const Menu: React.FC<MenuProps> = ({
           Cyber City Endless Sprint
         </p>
 
-        <div className="mt-4 flex items-center gap-4 text-sm text-slate-300 [@media(max-height:500px)]:mt-2 [@media(max-height:500px)]:text-xs">
+        <div className="mt-3.5 flex items-center gap-4 text-sm text-slate-300 [@media(max-height:500px)]:mt-2 [@media(max-height:500px)]:text-xs">
           <div>
-            <span className="text-slate-400">Record </span>
-            <span className="font-mono-num font-bold text-white">{highScore}m</span>
+            <span className="text-slate-400">
+              {runMode === 'turbo' ? 'Record Turbo ' : 'Record '}
+            </span>
+            <span className="font-mono-num font-bold text-white">{activeModeRecord}m</span>
           </div>
           <span aria-hidden="true" className="text-slate-600">·</span>
           <div>
@@ -133,18 +173,52 @@ const Menu: React.FC<MenuProps> = ({
           </div>
         </div>
 
-        <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:justify-center [@media(max-height:500px)]:mt-2.5 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:justify-center">
+        <div
+          role="group"
+          aria-label="Modalità di corsa"
+          className="mt-4 inline-flex items-center gap-1 rounded-lg border border-white/10 bg-[#0d1021]/90 p-1 [@media(max-height:500px)]:mt-2"
+        >
+          <button
+            type="button"
+            onClick={() => onSelectRunMode('classic')}
+            className={`min-h-[40px] rounded-md px-4 py-1.5 text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              runMode === 'classic'
+                ? 'bg-cyan-400 text-slate-950'
+                : 'text-slate-300 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            Corsa Classica
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectRunMode('turbo')}
+            className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-4 py-1.5 text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              runMode === 'turbo'
+                ? 'bg-amber-400 text-slate-950'
+                : 'text-slate-300 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>Corsa Turbo · 1.5x Crediti</span>
+          </button>
+        </div>
+
+        <div className="mt-4 flex w-full flex-col gap-3 sm:flex-row sm:justify-center [@media(max-height:500px)]:mt-2.5 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:justify-center">
           <button
             type="button"
             onClick={onStart}
-            className="inline-flex min-h-[48px] items-center justify-center rounded-lg bg-cyan-400 px-8 py-3 text-base font-bold text-slate-950 shadow-lg shadow-cyan-500/25 transition hover:bg-cyan-300 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer [@media(max-height:500px)]:min-h-[44px] [@media(max-height:500px)]:py-2"
+            className={`inline-flex min-h-[48px] items-center justify-center rounded-lg px-8 py-3 text-base font-bold text-slate-950 shadow-lg transition active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer [@media(max-height:500px)]:min-h-[44px] [@media(max-height:500px)]:py-2 ${
+              runMode === 'turbo'
+                ? 'bg-amber-400 shadow-amber-500/25 hover:bg-amber-300'
+                : 'bg-cyan-400 shadow-cyan-500/25 hover:bg-cyan-300'
+            }`}
           >
-            Avvia Corsa
+            {runMode === 'turbo' ? 'Avvia Corsa Turbo' : 'Avvia Corsa'}
           </button>
 
           <button
             type="button"
-            onClick={onOpenUpgrades}
+            onClick={() => onOpenUpgrades('upgrades')}
             className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-white/15 bg-[#0d1021]/90 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer [@media(max-height:500px)]:min-h-[44px] [@media(max-height:500px)]:py-2"
           >
             <Wrench className="h-4 w-4 text-amber-400" />
@@ -155,8 +229,36 @@ const Menu: React.FC<MenuProps> = ({
           </button>
         </div>
 
+        {(dailyCanClaim || dailyClaimedFeedback !== null) && (
+          <div className="mt-3.5 flex w-full items-center justify-between gap-3 rounded-lg border border-amber-400/35 bg-[#0d1021]/88 px-4 py-2.5 text-left [@media(max-height:500px)]:mt-2 [@media(max-height:500px)]:py-1.5">
+            <div className="flex items-center gap-2.5">
+              <Gift className="h-4 w-4 shrink-0 text-amber-400" />
+              <div className="text-xs">
+                {dailyClaimedFeedback !== null ? (
+                  <span className="font-semibold text-emerald-300">
+                    Ricompensa riscossa: +{dailyClaimedFeedback} Crediti · Serie Giorno {dailyStreak}
+                  </span>
+                ) : (
+                  <span className="text-slate-200">
+                    Bonus Giornaliero · Giorno {dailyStreak}
+                  </span>
+                )}
+              </div>
+            </div>
+            {dailyCanClaim && (
+              <button
+                type="button"
+                onClick={onClaimDaily}
+                className="inline-flex min-h-[40px] items-center justify-center rounded-md bg-amber-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 transition hover:bg-amber-300 active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                Riscuoti +{dailyRewardCredits}
+              </button>
+            )}
+          </div>
+        )}
+
         {missions.length > 0 && (
-          <div className="mt-5 w-full rounded-lg border border-white/10 bg-[#0d1021]/82 px-4 py-3 text-left [@media(max-height:500px)]:mt-2.5 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2">
+          <div className="mt-4 w-full rounded-lg border border-white/10 bg-[#0d1021]/82 px-4 py-3 text-left [@media(max-height:500px)]:mt-2 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-2">
             <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-300 [@media(max-height:500px)]:mb-1.5">
               <span>Missioni Attive</span>
               <span className="text-slate-400">Crediti Bonus</span>
@@ -201,7 +303,9 @@ const Menu: React.FC<MenuProps> = ({
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
           <span>Tap / Spazio / ↑: Salto e Doppio Salto</span>
           <span aria-hidden="true" className="text-slate-600">·</span>
-          <span>Tieni premuto in aria: Jetpack Boost</span>
+          <span>Tieni premuto in aria: Jetpack</span>
+          <span aria-hidden="true" className="text-slate-600">·</span>
+          <span>E: Onda EMP</span>
         </div>
       </div>
     </div>

@@ -1,17 +1,35 @@
 import { createMissionFromSeed, formatMissionLabel } from '../constants';
 import {
   ActiveMission,
+  CareerStats,
+  DailyRewardState,
   MissionType,
   OrientationMode,
   PlayerProgress,
+  RunMode,
   SkinId,
   UpgradeId,
 } from '../types';
+import {
+  computeDailyClaimState,
+  evaluateMilestoneSkins,
+  getLocalDateKey,
+} from './gameRules';
 
 const STORAGE_KEY = 'neon_runner_progress_v2';
 const LEGACY_HIGHSCORE_KEY = 'neon_runner_highscore';
 
-const VALID_SKINS: SkinId[] = ['cyan', 'crimson', 'solar', 'emerald', 'violet'];
+const VALID_SKINS: SkinId[] = [
+  'cyan',
+  'crimson',
+  'solar',
+  'emerald',
+  'violet',
+  'apex_chrome',
+  'boss_slayer',
+  'turbo_phantom',
+];
+
 const VALID_MISSION_TYPES: MissionType[] = [
   'distance',
   'drones',
@@ -37,11 +55,26 @@ function createInitialMissions(startSeed: number = 0): {
 
 const INITIAL_MISSION_BATCH = createInitialMissions(0);
 
+const DEFAULT_CAREER: CareerStats = {
+  totalRuns: 0,
+  totalDistance: 0,
+  totalDrones: 0,
+  totalBosses: 0,
+  bestCombo: 0,
+};
+
+const DEFAULT_DAILY: DailyRewardState = {
+  lastClaimDate: null,
+  streak: 0,
+};
+
 const DEFAULT_PROGRESS: PlayerProgress = {
   highScore: 0,
+  turboHighScore: 0,
   totalCredits: 0,
   muted: false,
   orientationMode: 'auto',
+  runMode: 'classic',
   unlockedSkins: ['cyan'],
   equippedSkin: 'cyan',
   upgrades: {
@@ -50,13 +83,20 @@ const DEFAULT_PROGRESS: PlayerProgress = {
     blasterRate: 0,
     creditMultiplier: 0,
     jetpackThruster: 0,
+    empWave: 0,
   },
   missions: INITIAL_MISSION_BATCH.missions,
   missionSeed: INITIAL_MISSION_BATCH.nextSeed,
+  dailyReward: { ...DEFAULT_DAILY },
+  career: { ...DEFAULT_CAREER },
 };
 
 function sanitizeOrientation(val: unknown): OrientationMode {
   return val === 'landscape' ? 'landscape' : 'auto';
+}
+
+function sanitizeRunMode(val: unknown): RunMode {
+  return val === 'turbo' ? 'turbo' : 'classic';
 }
 
 function sanitizeSkinId(val: unknown): SkinId {
@@ -75,6 +115,34 @@ function sanitizeUnlockedSkins(val: unknown): SkinId[] {
     filtered.unshift('cyan');
   }
   return Array.from(new Set(filtered));
+}
+
+function sanitizeNonNegativeInt(val: unknown): number {
+  if (typeof val !== 'number' || !Number.isFinite(val)) return 0;
+  return Math.max(0, Math.floor(val));
+}
+
+function sanitizeDailyReward(val: unknown): DailyRewardState {
+  if (!val || typeof val !== 'object') return { ...DEFAULT_DAILY };
+  const raw = val as Partial<DailyRewardState>;
+  const lastClaimDate =
+    typeof raw.lastClaimDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.lastClaimDate)
+      ? raw.lastClaimDate
+      : null;
+  const streak = sanitizeNonNegativeInt(raw.streak);
+  return { lastClaimDate, streak };
+}
+
+function sanitizeCareer(val: unknown): CareerStats {
+  if (!val || typeof val !== 'object') return { ...DEFAULT_CAREER };
+  const raw = val as Partial<CareerStats>;
+  return {
+    totalRuns: sanitizeNonNegativeInt(raw.totalRuns),
+    totalDistance: sanitizeNonNegativeInt(raw.totalDistance),
+    totalDrones: sanitizeNonNegativeInt(raw.totalDrones),
+    totalBosses: sanitizeNonNegativeInt(raw.totalBosses),
+    bestCombo: sanitizeNonNegativeInt(raw.bestCombo),
+  };
 }
 
 function sanitizeMissions(
@@ -165,10 +233,12 @@ export function loadProgress(): PlayerProgress {
       const missionState = sanitizeMissions(parsed.missions, parsed.missionSeed);
 
       return {
-        highScore: typeof parsed.highScore === 'number' ? parsed.highScore : 0,
-        totalCredits: typeof parsed.totalCredits === 'number' ? parsed.totalCredits : 0,
+        highScore: sanitizeNonNegativeInt(parsed.highScore),
+        turboHighScore: sanitizeNonNegativeInt(parsed.turboHighScore),
+        totalCredits: sanitizeNonNegativeInt(parsed.totalCredits),
         muted: Boolean(parsed.muted),
         orientationMode: sanitizeOrientation(parsed.orientationMode),
+        runMode: sanitizeRunMode(parsed.runMode),
         unlockedSkins: unlocked,
         equippedSkin: equipped,
         upgrades: {
@@ -177,9 +247,12 @@ export function loadProgress(): PlayerProgress {
           blasterRate: sanitizeLevel(parsed.upgrades?.blasterRate),
           creditMultiplier: sanitizeLevel(parsed.upgrades?.creditMultiplier),
           jetpackThruster: sanitizeLevel(parsed.upgrades?.jetpackThruster),
+          empWave: sanitizeLevel(parsed.upgrades?.empWave),
         },
         missions: missionState.missions,
         missionSeed: missionState.missionSeed,
+        dailyReward: sanitizeDailyReward(parsed.dailyReward),
+        career: sanitizeCareer(parsed.career),
       };
     }
 
@@ -191,6 +264,8 @@ export function loadProgress(): PlayerProgress {
       upgrades: { ...DEFAULT_PROGRESS.upgrades },
       missions: fresh.missions,
       missionSeed: fresh.nextSeed,
+      dailyReward: { ...DEFAULT_DAILY },
+      career: { ...DEFAULT_CAREER },
       highScore: Number.isFinite(legacyScore) && legacyScore > 0 ? legacyScore : 0,
     };
   } catch {
@@ -201,6 +276,8 @@ export function loadProgress(): PlayerProgress {
       upgrades: { ...DEFAULT_PROGRESS.upgrades },
       missions: fresh.missions,
       missionSeed: fresh.nextSeed,
+      dailyReward: { ...DEFAULT_DAILY },
+      career: { ...DEFAULT_CAREER },
     };
   }
 }
@@ -224,7 +301,7 @@ export function updateUpgradeLevel(
   id: UpgradeId,
   cost: number
 ): PlayerProgress | null {
-  if (progress.totalCredits < cost) return null;
+  if (progress.totalCredits < cost || progress.upgrades[id] >= 5) return null;
   const next: PlayerProgress = {
     ...progress,
     totalCredits: progress.totalCredits - cost,
@@ -240,14 +317,15 @@ export function updateUpgradeLevel(
 export function unlockAndEquipSkin(
   progress: PlayerProgress,
   skinId: SkinId,
-  cost: number
+  cost: number,
+  isMilestoneLocked: boolean = false
 ): PlayerProgress | null {
   if (progress.unlockedSkins.includes(skinId)) {
     const next: PlayerProgress = { ...progress, equippedSkin: skinId };
     saveProgress(next);
     return next;
   }
-  if (progress.totalCredits < cost) return null;
+  if (isMilestoneLocked || progress.totalCredits < cost) return null;
   const next: PlayerProgress = {
     ...progress,
     totalCredits: progress.totalCredits - cost,
@@ -256,4 +334,84 @@ export function unlockAndEquipSkin(
   };
   saveProgress(next);
   return next;
+}
+
+export function claimDailyReward(
+  progress: PlayerProgress,
+  todayKey: string = getLocalDateKey()
+): {
+  nextProgress: PlayerProgress;
+  rewardCredits: number;
+  newStreak: number;
+} | null {
+  const claimState = computeDailyClaimState(progress.dailyReward, todayKey);
+  if (!claimState.canClaim) return null;
+
+  const nextProgress: PlayerProgress = {
+    ...progress,
+    totalCredits: progress.totalCredits + claimState.rewardCredits,
+    dailyReward: {
+      lastClaimDate: todayKey,
+      streak: claimState.nextStreak,
+    },
+  };
+  saveProgress(nextProgress);
+  return {
+    nextProgress,
+    rewardCredits: claimState.rewardCredits,
+    newStreak: claimState.nextStreak,
+  };
+}
+
+export function recordRunOutcome(
+  progress: PlayerProgress,
+  outcome: {
+    score: number;
+    runMode: RunMode;
+    earnedCredits: number;
+    dronesDestroyed: number;
+    bossesDefeated: number;
+    maxCombo: number;
+  }
+): {
+  nextProgress: PlayerProgress;
+  beatRecord: boolean;
+  newlyUnlockedSkins: SkinId[];
+} {
+  const isTurbo = outcome.runMode === 'turbo';
+  const beatRecord = isTurbo
+    ? outcome.score > progress.turboHighScore
+    : outcome.score > progress.highScore;
+
+  const updatedCareer: CareerStats = {
+    totalRuns: progress.career.totalRuns + 1,
+    totalDistance: progress.career.totalDistance + Math.max(0, Math.floor(outcome.score)),
+    totalDrones: progress.career.totalDrones + Math.max(0, Math.floor(outcome.dronesDestroyed)),
+    totalBosses: progress.career.totalBosses + Math.max(0, Math.floor(outcome.bossesDefeated)),
+    bestCombo: Math.max(progress.career.bestCombo, Math.max(0, Math.floor(outcome.maxCombo))),
+  };
+
+  const baseUpdated: PlayerProgress = {
+    ...progress,
+    highScore: !isTurbo && beatRecord ? outcome.score : progress.highScore,
+    turboHighScore: isTurbo && beatRecord ? outcome.score : progress.turboHighScore,
+    totalCredits: progress.totalCredits + Math.max(0, Math.floor(outcome.earnedCredits)),
+    career: updatedCareer,
+  };
+
+  const newlyUnlockedSkins = evaluateMilestoneSkins(baseUpdated, outcome.score, outcome.runMode);
+  const nextProgress: PlayerProgress =
+    newlyUnlockedSkins.length > 0
+      ? {
+          ...baseUpdated,
+          unlockedSkins: Array.from(new Set([...baseUpdated.unlockedSkins, ...newlyUnlockedSkins])),
+        }
+      : baseUpdated;
+
+  saveProgress(nextProgress);
+  return {
+    nextProgress,
+    beatRecord,
+    newlyUnlockedSkins,
+  };
 }

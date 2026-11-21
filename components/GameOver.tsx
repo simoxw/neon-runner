@@ -1,14 +1,19 @@
 import React from 'react';
-import { Check, Home, RotateCcw, Wrench } from 'lucide-react';
-import { ActiveMission } from '../types';
+import { Award, Check, Home, RotateCcw, Wrench } from 'lucide-react';
+import { getSkinConfig } from '../constants';
+import { ActiveMission, RunMode, SkinId } from '../types';
 
 interface GameOverProps {
   score: number;
   highScore: number;
+  runMode: RunMode;
   runCredits: number;
   totalCredits: number;
   dronesDestroyed: number;
+  bossesDefeated: number;
+  maxCombo: number;
   isNewRecord: boolean;
+  newlyUnlockedSkins: SkinId[];
   missions: ActiveMission[];
   onRestart: () => void;
   onOpenUpgrades: () => void;
@@ -18,10 +23,14 @@ interface GameOverProps {
 const GameOver: React.FC<GameOverProps> = ({
   score,
   highScore,
+  runMode,
   runCredits,
   totalCredits,
   dronesDestroyed,
+  bossesDefeated,
+  maxCombo,
   isNewRecord,
+  newlyUnlockedSkins,
   missions,
   onRestart,
   onOpenUpgrades,
@@ -34,11 +43,10 @@ const GameOver: React.FC<GameOverProps> = ({
           <h2 className="font-display text-3xl font-bold text-white [@media(max-height:500px)]:text-2xl">
             Corsa Terminata
           </h2>
-          {isNewRecord && (
-            <p className="mt-1 text-xs font-bold uppercase tracking-wider text-cyan-400">
-              Nuovo Record Personale
-            </p>
-          )}
+          <p className="mt-1 text-xs font-medium text-slate-400">
+            {runMode === 'turbo' ? 'Modalità Corsa Turbo · 1.5x Crediti' : 'Modalità Corsa Classica'}
+            {isNewRecord ? ' · Nuovo Record!' : ''}
+          </p>
         </div>
 
         <div className="mt-4 space-y-2 border-y border-white/10 py-3 text-sm [@media(max-height:500px)]:mt-2.5 [@media(max-height:500px)]:space-y-1.5 [@media(max-height:500px)]:py-2">
@@ -58,15 +66,38 @@ const GameOver: React.FC<GameOverProps> = ({
             <span className="text-slate-400">Droni Distrutti</span>
             <span className="font-mono-num font-semibold text-amber-300">{dronesDestroyed}</span>
           </div>
+          {(bossesDefeated > 0 || maxCombo >= 6) && (
+            <div className="flex items-center justify-between text-xs text-slate-300">
+              <span>
+                Boss Abbattuti: <strong className="font-mono-num text-rose-300">{bossesDefeated}</strong>
+              </span>
+              <span>
+                Serie Max: <strong className="font-mono-num text-cyan-300">{maxCombo}</strong>
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between pt-1 text-xs">
             <span className="text-slate-400">
-              Record: <strong className="font-mono-num text-slate-200">{highScore}m</strong>
+              {runMode === 'turbo' ? 'Record Turbo: ' : 'Record: '}
+              <strong className="font-mono-num text-slate-200">{highScore}m</strong>
             </span>
             <span className="text-slate-400">
               Portafoglio: <strong className="font-mono-num text-emerald-400">{totalCredits}</strong>
             </span>
           </div>
         </div>
+
+        {newlyUnlockedSkins.length > 0 && (
+          <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+            <Award className="h-4 w-4 shrink-0 text-amber-300" />
+            <span>
+              Tuta sbloccata:{' '}
+              <strong className="text-white">
+                {newlyUnlockedSkins.map((id) => getSkinConfig(id).name).join(', ')}
+              </strong>
+            </span>
+          </div>
+        )}
 
         {missions.length > 0 && (
           <div className="mt-3 space-y-2 border-b border-white/10 pb-3 [@media(max-height:500px)]:mt-2 [@media(max-height:500px)]:pb-2">
@@ -79,7 +110,7 @@ const GameOver: React.FC<GameOverProps> = ({
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span
                         className={`truncate ${
-                          mission.completed ? 'text-emerald-300 font-semibold' : 'text-slate-300'
+                          mission.completed ? 'font-semibold text-emerald-300' : 'text-slate-300'
                         }`}
                       >
                         {mission.label}

@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import { GAME_CONFIG, getGroundHeight } from '../../constants';
 import {
   advanceLaserState,
+  computeBossMaxHp,
   isChasmPattern,
   LaserPhase,
   PatternId,
   pickNextPattern,
+  pickPowerupType,
   RoadGapSpan,
 } from '../../utils/gameRules';
 import { soundEngine } from '../../utils/sound';
@@ -18,6 +20,13 @@ interface ActiveMissileWarning {
   phase: 'tracking' | 'locked';
 }
 
+export interface EmpImpactResult {
+  clearedPoints: Array<{ x: number; y: number; points: number }>;
+  dronesCleared: number;
+  bossDefeated: boolean;
+  bossPos: { x: number; y: number; bountyBase: number } | null;
+}
+
 export class ObstacleManager {
   public scene: Phaser.Scene;
   public barriers: Phaser.Physics.Arcade.Group;
@@ -25,10 +34,24 @@ export class ObstacleManager {
   public drones: Phaser.Physics.Arcade.Group;
   public missiles: Phaser.Physics.Arcade.Group;
   public platforms: Phaser.Physics.Arcade.Group;
+  public jumpPads: Phaser.Physics.Arcade.Group;
   public roadGaps: Phaser.Physics.Arcade.Group;
   public boostRings: Phaser.Physics.Arcade.Group;
   public coins: Phaser.Physics.Arcade.Group;
   public powerups: Phaser.Physics.Arcade.Group;
+  public bosses: Phaser.Physics.Arcade.Group;
+
+  public bossActive: boolean = false;
+  public bossHp: number = 0;
+  public bossMaxHp: number = 0;
+  public bossEncounterCount: number = 0;
+
+  private activeBoss: Phaser.Physics.Arcade.Sprite | null = null;
+  private bossRetreating: boolean = false;
+  private bossTimerMs: number = 0;
+  private bossAttackTimerMs: number = 0;
+  private nextBossScoreMeters: number = GAME_CONFIG.BOSS_INTERVAL_METERS;
+  private onBossAlert: ((bossNumber: number) => void) | null = null;
 
   private distanceUntilNextPattern: number = 220;
   private distanceSincePowerup: number = 0;
@@ -38,8 +61,9 @@ export class ObstacleManager {
   private chainRemaining: number = 0;
   private warnings: ActiveMissileWarning[] = [];
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, onBossAlert?: (bossNumber: number) => void) {
     this.scene = scene;
+    this.onBossAlert = onBossAlert ?? null;
 
     this.barriers = scene.physics.add.group({
       defaultKey: 'barrier',
@@ -48,22 +72,27 @@ export class ObstacleManager {
 
     this.lasers = scene.physics.add.group({
       defaultKey: 'laser_gate_warn',
-      maxSize: 8,
+      maxSize: 10,
     });
 
     this.drones = scene.physics.add.group({
       defaultKey: 'drone_0',
-      maxSize: 16,
+      maxSize: 18,
     });
 
     this.missiles = scene.physics.add.group({
       defaultKey: 'missile_0',
-      maxSize: 6,
+      maxSize: 8,
     });
 
     this.platforms = scene.physics.add.group({
       defaultKey: 'sky_platform',
       maxSize: 12,
+    });
+
+    this.jumpPads = scene.physics.add.group({
+      defaultKey: 'jump_pad',
+      maxSize: 8,
     });
 
     this.roadGaps = scene.physics.add.group({
@@ -85,6 +114,11 @@ export class ObstacleManager {
       defaultKey: 'powerup_shield',
       maxSize: 4,
     });
+
+    this.bosses = scene.physics.add.group({
+      defaultKey: 'boss_drone_0',
+      maxSize: 2,
+    });
   }
 
   update(
@@ -101,30 +135,46 @@ export class ObstacleManager {
     this.distanceSincePowerup += dx;
     this.distanceSinceMissile += dx;
 
+    // Trigger periodic Sector Boss Drone every 600m
+    if (!this.bossActive && scoreMeters >= this.nextBossScoreMeters) {
+      this.spawnBoss();
+    }
+
+    if (this.bossActive) {
+      this.updateBoss(time, delta, speed, player);
+    }
+
     if (this.distanceUntilNextPattern <= 0) {
-      const spawned = this.spawnPattern(speed, scoreMeters);
-      if (this.chainRemaining > 0) {
-        this.chainRemaining -= 1;
-        const recoveryGap = spawned.isChasm
-          ? Math.max(295, speed * 0.65)
-          : Math.max(285, speed * 0.64);
-        const maxGap = Math.max(430, speed * 0.94);
-        this.distanceUntilNextPattern = spawned.width + Phaser.Math.Between(recoveryGap, maxGap);
-      } else if (spawned.startsChain) {
-        this.chainRemaining = 1;
-        const chainGap = Math.max(198, speed * 0.45);
-        this.distanceUntilNextPattern = spawned.width + chainGap;
+      if (this.bossActive) {
+        // Light support lanes during Boss fight (jump pads + coin arcs)
+        this.spawnBossArenaSupport(speed);
+        this.distanceUntilNextPattern = Math.max(460, speed * 0.92);
       } else {
-        const minSafeGap = spawned.isChasm
-          ? Math.max(295, speed * 0.65)
-          : Math.max(285, speed * 0.64);
-        const maxGap = Math.max(430, speed * 0.94);
-        this.distanceUntilNextPattern = spawned.width + Phaser.Math.Between(minSafeGap, maxGap);
+        const spawned = this.spawnPattern(speed, scoreMeters);
+        if (this.chainRemaining > 0) {
+          this.chainRemaining -= 1;
+          const recoveryGap = spawned.isChasm
+            ? Math.max(295, speed * 0.65)
+            : Math.max(285, speed * 0.64);
+          const maxGap = Math.max(430, speed * 0.94);
+          this.distanceUntilNextPattern = spawned.width + Phaser.Math.Between(recoveryGap, maxGap);
+        } else if (spawned.startsChain) {
+          this.chainRemaining = 1;
+          const chainGap = Math.max(198, speed * 0.45);
+          this.distanceUntilNextPattern = spawned.width + chainGap;
+        } else {
+          const minSafeGap = spawned.isChasm
+            ? Math.max(295, speed * 0.65)
+            : Math.max(285, speed * 0.64);
+          const maxGap = Math.max(430, speed * 0.94);
+          this.distanceUntilNextPattern = spawned.width + Phaser.Math.Between(minSafeGap, maxGap);
+        }
       }
     }
 
-    // Trigger Jetpack Joyride-style missile warning periodically after 80m
+    // Trigger Jetpack Joyride-style missile warning periodically after 80m (paused during Boss)
     if (
+      !this.bossActive &&
       scoreMeters >= 80 &&
       this.distanceSinceMissile >= this.nextMissileDistance &&
       this.warnings.length === 0
@@ -136,9 +186,10 @@ export class ObstacleManager {
 
     this.updateMissileWarnings(delta, speed, player);
 
-    // Move barriers, laser gates, road gaps, boost rings, and sky platforms
+    // Move barriers, laser gates, jump pads, road gaps, boost rings, and sky platforms
     this.updateGroupMovement(this.barriers, speed, -120);
     this.updateGroupMovement(this.platforms, speed, -180);
+    this.updateGroupMovement(this.jumpPads, speed, -120);
     this.updateGroupMovement(this.roadGaps, speed, -220);
     this.updateGroupMovement(this.boostRings, speed, -120);
     this.updateLasers(time, delta, speed);
@@ -215,6 +266,227 @@ export class ObstacleManager {
           p.disableBody(true, true);
         }
       }
+    }
+  }
+
+  private spawnBoss() {
+    const { width, height } = this.scene.scale;
+    const gh = getGroundHeight(height);
+    const groundTop = height - gh;
+    const safeTopY = Math.max(88, height * 0.24);
+    const spawnY = (safeTopY + groundTop - 60) * 0.5;
+
+    this.bossEncounterCount += 1;
+    this.nextBossScoreMeters += GAME_CONFIG.BOSS_INTERVAL_METERS;
+    this.bossMaxHp = computeBossMaxHp(this.bossEncounterCount);
+    this.bossHp = this.bossMaxHp;
+    this.bossActive = true;
+    this.bossRetreating = false;
+    this.bossTimerMs = 0;
+    this.bossAttackTimerMs = 1200;
+
+    const boss = this.bosses.get(width + 110, spawnY, 'boss_drone_0') as Phaser.Physics.Arcade.Sprite | null;
+    if (boss) {
+      boss.clearTint();
+      boss.enableBody(true, width + 110, spawnY, true, true);
+      boss.setDepth(8);
+      boss.play('anim_boss_drone', true);
+      if (boss.body) {
+        const body = boss.body as Phaser.Physics.Arcade.Body;
+        body.setAllowGravity(false);
+        body.immovable = true;
+        body.setSize(86, 54);
+        body.setOffset(15, 15);
+      }
+      this.activeBoss = boss;
+    }
+
+    soundEngine.playBossAlert();
+    this.onBossAlert?.(this.bossEncounterCount);
+  }
+
+  private updateBoss(time: number, delta: number, speed: number, player: Player | null) {
+    if (!this.activeBoss || !this.activeBoss.active) {
+      this.bossActive = false;
+      this.activeBoss = null;
+      return;
+    }
+
+    const { width, height } = this.scene.scale;
+    const gh = getGroundHeight(height);
+    const groundTop = height - gh;
+    const safeTopY = Math.max(86, height * 0.22);
+    const dtSec = delta / 1000;
+
+    this.bossTimerMs += delta;
+
+    if (!this.bossRetreating && this.bossTimerMs >= 19000) {
+      this.bossRetreating = true;
+    }
+
+    if (this.bossRetreating) {
+      this.activeBoss.x += 340 * dtSec;
+      this.activeBoss.y -= 110 * dtSec;
+      if (this.activeBoss.x > width + 140) {
+        this.activeBoss.disableBody(true, true);
+        this.activeBoss = null;
+        this.bossActive = false;
+        this.bossHp = 0;
+      }
+      return;
+    }
+
+    const targetX = Math.max(width * 0.62, width - 135);
+    this.activeBoss.x = Phaser.Math.Linear(this.activeBoss.x, targetX, Math.min(1, dtSec * 3.2));
+
+    const minHoverY = safeTopY + 34;
+    const maxHoverY = Math.max(minHoverY + 24, groundTop - 82);
+    const centerHoverY = (minHoverY + maxHoverY) * 0.5;
+    const hoverAmp = (maxHoverY - minHoverY) * 0.44;
+    this.activeBoss.y = centerHoverY + Math.sin(time * 0.0026) * hoverAmp;
+
+    this.bossAttackTimerMs -= delta;
+    if (this.bossAttackTimerMs <= 0 && this.activeBoss.x < width + 20) {
+      const interval = Math.max(1200, 1750 - this.bossEncounterCount * 110);
+      this.bossAttackTimerMs = interval;
+
+      // Alternate between firing a horizontal plasma missile from boss cannon and releasing an attack drone
+      if (Phaser.Math.Between(0, 1) === 0) {
+        const launchY = Phaser.Math.Clamp(
+          player ? player.y : this.activeBoss.y,
+          safeTopY + 12,
+          groundTop - 32
+        );
+        this.spawnMissile(this.activeBoss.x - 42, launchY, speed * 0.94);
+      } else {
+        const droneY = Phaser.Math.Clamp(this.activeBoss.y + 8, safeTopY + 14, groundTop - 52);
+        this.spawnDrone(this.activeBoss.x - 40, droneY, speed * 0.92, false);
+      }
+    }
+  }
+
+  public damageBoss(amount: number): {
+    hit: boolean;
+    defeated: boolean;
+    x: number;
+    y: number;
+    bountyBase: number;
+  } {
+    if (!this.bossActive || !this.activeBoss || !this.activeBoss.active || this.bossRetreating) {
+      return { hit: false, defeated: false, x: 0, y: 0, bountyBase: 0 };
+    }
+
+    const bx = this.activeBoss.x;
+    const by = this.activeBoss.y;
+    this.bossHp = Math.max(0, this.bossHp - Math.max(1, amount));
+
+    if (this.bossHp <= 0) {
+      this.activeBoss.disableBody(true, true);
+      this.activeBoss = null;
+      this.bossActive = false;
+      const bountyBase = 28 + this.bossEncounterCount * 10;
+      return { hit: true, defeated: true, x: bx, y: by, bountyBase };
+    }
+
+    this.activeBoss.setTint(0xffffff);
+    this.scene.time.delayedCall(65, () => {
+      if (this.activeBoss && this.activeBoss.active) {
+        this.activeBoss.clearTint();
+      }
+    });
+
+    return { hit: true, defeated: false, x: bx, y: by, bountyBase: 0 };
+  }
+
+  public triggerEmpBlast(time: number): EmpImpactResult {
+    const clearedPoints: Array<{ x: number; y: number; points: number }> = [];
+    let dronesCleared = 0;
+
+    // Destroy all active drones on screen
+    const droneChildren = this.drones.getChildren();
+    for (let i = 0; i < droneChildren.length; i++) {
+      const drone = droneChildren[i] as Phaser.Physics.Arcade.Sprite;
+      if (drone && drone.active) {
+        const armored = Boolean(drone.getData('armored'));
+        clearedPoints.push({ x: drone.x, y: drone.y, points: armored ? 4 : 2 });
+        dronesCleared += 1;
+        drone.disableBody(true, true);
+      }
+    }
+
+    // Destroy all active missiles
+    const missileChildren = this.missiles.getChildren();
+    for (let i = 0; i < missileChildren.length; i++) {
+      const m = missileChildren[i] as Phaser.Physics.Arcade.Sprite;
+      if (m && m.active) {
+        clearedPoints.push({ x: m.x, y: m.y, points: 2 });
+        m.disableBody(true, true);
+      }
+    }
+
+    // Cancel pending missile warnings
+    for (let i = 0; i < this.warnings.length; i++) {
+      this.warnings[i].sprite.destroy();
+    }
+    this.warnings = [];
+
+    // Temporarily disable all active laser gates for 3.6 seconds
+    const laserChildren = this.lasers.getChildren();
+    for (let i = 0; i < laserChildren.length; i++) {
+      const laser = laserChildren[i] as Phaser.Physics.Arcade.Sprite;
+      if (laser && laser.active) {
+        laser.setData('empDisabledUntil', time + 3600);
+        laser.setData('laserState', 'warning');
+        laser.setTexture('laser_gate_warn');
+        laser.setAlpha(0.25);
+      }
+    }
+
+    // Deal heavy EMP damage to active Boss Drone
+    let bossDefeated = false;
+    let bossPos: { x: number; y: number; bountyBase: number } | null = null;
+    if (this.bossActive && !this.bossRetreating) {
+      const empDamage = Math.max(4, Math.ceil(this.bossMaxHp * 0.4));
+      const dmg = this.damageBoss(empDamage);
+      if (dmg.defeated) {
+        bossDefeated = true;
+        bossPos = { x: dmg.x, y: dmg.y, bountyBase: dmg.bountyBase };
+      }
+    }
+
+    return {
+      clearedPoints,
+      dronesCleared,
+      bossDefeated,
+      bossPos,
+    };
+  }
+
+  private spawnBossArenaSupport(speed: number) {
+    const { width, height } = this.scene.scale;
+    const gh = getGroundHeight(height);
+    const groundTop = height - gh;
+    const safeTopY = Math.max(76, height * 0.21);
+    const usableHeight = Math.max(120, groundTop - safeTopY);
+    const startX = width + 90;
+
+    if (Phaser.Math.Between(0, 1) === 0) {
+      this.spawnJumpPad(startX + 40, groundTop, speed);
+      this.spawnCoinArc(
+        startX + 120,
+        Math.max(safeTopY + 18, groundTop - Math.min(165, usableHeight * 0.72)),
+        4,
+        speed,
+        safeTopY
+      );
+    } else {
+      this.spawnCoinArc(
+        startX + 40,
+        Math.max(safeTopY + 20, groundTop - Math.min(92, usableHeight * 0.45)),
+        4,
+        speed,
+        safeTopY
+      );
     }
   }
 
@@ -321,22 +593,40 @@ export class ObstacleManager {
       const laser = children[i] as Phaser.Physics.Arcade.Sprite;
       if (laser && laser.active) {
         laser.setVelocityX(-speed);
-        const prevPhase = (laser.getData('laserState') as LaserPhase) || 'warning';
-        const prevElapsed = (laser.getData('laserElapsedMs') as number) || 0;
-        const next = advanceLaserState({ phase: prevPhase, elapsedMs: prevElapsed }, delta);
-        laser.setData('laserState', next.phase);
-        laser.setData('laserElapsedMs', next.elapsedMs);
 
-        if (next.phase === 'warning') {
+        const moving = Boolean(laser.getData('moving'));
+        if (moving) {
+          const baseY = (laser.getData('baseY') as number) || laser.y;
+          const ampY = (laser.getData('ampY') as number) || 44;
+          const phase = (laser.getData('phase') as number) || 0;
+          laser.y = baseY + Math.sin(time * 0.0032 + phase) * ampY;
+        }
+
+        const empDisabledUntil = (laser.getData('empDisabledUntil') as number) || 0;
+        if (empDisabledUntil > time) {
+          laser.setData('laserState', 'warning');
           if (laser.texture.key !== 'laser_gate_warn') {
             laser.setTexture('laser_gate_warn');
           }
-          laser.setAlpha(Math.floor(time / 70) % 2 === 0 ? 0.85 : 0.4);
+          laser.setAlpha(0.22);
         } else {
-          if (laser.texture.key !== 'laser_gate_active') {
-            laser.setTexture('laser_gate_active');
+          const prevPhase = (laser.getData('laserState') as LaserPhase) || 'warning';
+          const prevElapsed = (laser.getData('laserElapsedMs') as number) || 0;
+          const next = advanceLaserState({ phase: prevPhase, elapsedMs: prevElapsed }, delta);
+          laser.setData('laserState', next.phase);
+          laser.setData('laserElapsedMs', next.elapsedMs);
+
+          if (next.phase === 'warning') {
+            if (laser.texture.key !== 'laser_gate_warn') {
+              laser.setTexture('laser_gate_warn');
+            }
+            laser.setAlpha(Math.floor(time / 70) % 2 === 0 ? 0.85 : 0.4);
+          } else {
+            if (laser.texture.key !== 'laser_gate_active') {
+              laser.setTexture('laser_gate_active');
+            }
+            laser.setAlpha(0.92 + Math.sin(time * 0.03) * 0.08);
           }
-          laser.setAlpha(0.92 + Math.sin(time * 0.03) * 0.08);
         }
 
         if (laser.x < -100) {
@@ -359,10 +649,10 @@ export class ObstacleManager {
 
     const clampY = (desiredY: number) => Math.max(safeTopY, Math.min(groundTop - 36, desiredY));
 
-    // Periodic Shield or Magnet drop (~every 180m)
+    // Periodic Magnet (70%) or Shield (30%) drop (~every 180m)
     if (this.distanceSincePowerup >= GAME_CONFIG.POWERUP_INTERVAL_METERS * 14) {
       this.distanceSincePowerup = 0;
-      const type = Phaser.Math.Between(0, 1) === 0 ? 'shield' : 'magnet';
+      const type = pickPowerupType();
       const powerupY = clampY(groundTop - Math.min(125, usableHeight * 0.62));
       this.spawnPowerup(startX + 40, powerupY, type, speed);
       this.spawnCoinArc(
@@ -523,6 +813,36 @@ export class ObstacleManager {
         return { width: 390, isChasm, startsChain };
       }
 
+      case 'jump_pad_skyline': {
+        const highLift = Math.min(usableHeight - 28, Math.max(125, usableHeight * 0.68));
+        const highY = clampY(groundTop - highLift);
+        this.spawnJumpPad(startX + 20, groundTop, speed);
+        this.spawnBarrier(startX + 185, groundTop, true, speed);
+        this.spawnPlatform(startX + 280, highY, speed);
+        this.spawnCoinArc(
+          startX + 95,
+          Math.max(safeTopY + 18, highY - 26),
+          5,
+          speed,
+          safeTopY
+        );
+        this.spawnBoostRing(startX + 280, Math.max(safeTopY + 14, highY - 42), speed);
+        return { width: 390, isChasm: false, startsChain };
+      }
+
+      case 'jump_pad_chasm_launch': {
+        const gapWidth = Phaser.Math.Between(126, 146);
+        const gapCenterX = startX + 190;
+        const highCoinY = clampY(groundTop - Math.min(165, usableHeight * 0.72));
+
+        this.spawnJumpPad(startX + 18, groundTop, speed);
+        this.spawnRoadGap(gapCenterX, gapWidth, gh, height, speed);
+        this.spawnCoinArc(startX + 100, highCoinY, 5, speed, safeTopY);
+        this.spawnBoostRing(gapCenterX + 10, Math.max(safeTopY + 16, highCoinY - 12), speed);
+
+        return { width: 310, isChasm: true, startsChain: false };
+      }
+
       case 'road_chasm': {
         const gapWidth = Phaser.Math.Between(122, 150);
         const gapCenterX = startX + 95;
@@ -574,7 +894,7 @@ export class ObstacleManager {
 
         this.spawnPlatform(startX + 40, bypassY, speed);
         this.spawnCoinLine(startX - 4, Math.max(safeTopY, bypassY - 28), 3, speed);
-        this.spawnLaserGate(startX + 240, gateY, speed);
+        this.spawnLaserGate(startX + 240, gateY, speed, false);
         this.spawnBoostRing(startX + 240, Math.max(safeTopY + 16, bypassY - 36), speed);
 
         return { width: 340, isChasm, startsChain };
@@ -586,8 +906,17 @@ export class ObstacleManager {
         this.spawnDrone(startX + 50, clampY(groundTop - 86), speed, true);
         this.spawnPlatform(startX + 215, highY, speed);
         this.spawnCoinLine(startX + 175, Math.max(safeTopY, highY - 28), 3, speed);
-        this.spawnLaserGate(startX + 240, gateY, speed);
+        this.spawnLaserGate(startX + 240, gateY, speed, false);
         return { width: 360, isChasm, startsChain };
+      }
+
+      case 'moving_laser_corridor': {
+        const swingCenter = clampY(groundTop - Math.min(112, usableHeight * 0.54));
+        const maxAmp = Math.max(24, Math.min(48, (groundTop - safeTopY - 120) * 0.42));
+        this.spawnLaserGate(startX + 70, swingCenter, speed, true, maxAmp, 0);
+        this.spawnCoinArc(startX + 150, swingCenter, 4, speed, safeTopY);
+        this.spawnLaserGate(startX + 290, swingCenter, speed, true, maxAmp, Math.PI);
+        return { width: 380, isChasm: false, startsChain };
       }
 
       case 'coin_wave':
@@ -663,6 +992,24 @@ export class ObstacleManager {
     }
   }
 
+  private spawnJumpPad(x: number, groundTop: number, speed: number) {
+    const y = groundTop - 9;
+    const pad = this.jumpPads.get(x, y, 'jump_pad') as Phaser.Physics.Arcade.Sprite | null;
+    if (pad) {
+      pad.setData('triggered', false);
+      pad.enableBody(true, x, y, true, true);
+      pad.setDepth(5.5);
+      if (pad.body) {
+        const body = pad.body as Phaser.Physics.Arcade.Body;
+        body.setAllowGravity(false);
+        body.immovable = true;
+        body.setSize(48, 16);
+        body.setOffset(6, 4);
+        pad.setVelocityX(-speed);
+      }
+    }
+  }
+
   private spawnPlatform(x: number, y: number, speed: number) {
     const platform = this.platforms.get(x, y, 'sky_platform') as Phaser.Physics.Arcade.Sprite | null;
     if (platform) {
@@ -705,12 +1052,29 @@ export class ObstacleManager {
     }
   }
 
-  private spawnLaserGate(x: number, y: number, speed: number) {
+  private spawnLaserGate(
+    x: number,
+    y: number,
+    speed: number,
+    moving: boolean = false,
+    ampY: number = 40,
+    phase: number = 0
+  ) {
     const laser = this.lasers.get(x, y, 'laser_gate_warn') as Phaser.Physics.Arcade.Sprite | null;
     if (laser) {
       laser.setTexture('laser_gate_warn');
       laser.setData('laserState', 'warning');
       laser.setData('laserElapsedMs', Phaser.Math.Between(0, 350));
+      laser.setData('moving', moving);
+      laser.setData('baseY', y);
+      laser.setData('ampY', ampY);
+      laser.setData('phase', phase);
+      laser.setData('empDisabledUntil', 0);
+      if (moving) {
+        laser.setTint(0xff6b9d);
+      } else {
+        laser.clearTint();
+      }
       laser.enableBody(true, x, y, true, true);
       laser.setDepth(6);
       if (laser.body) {
@@ -831,15 +1195,27 @@ export class ObstacleManager {
     deactivateAll(this.drones);
     deactivateAll(this.missiles);
     deactivateAll(this.platforms);
+    deactivateAll(this.jumpPads);
     deactivateAll(this.roadGaps);
     deactivateAll(this.boostRings);
     deactivateAll(this.coins);
     deactivateAll(this.powerups);
+    deactivateAll(this.bosses);
 
     for (let i = 0; i < this.warnings.length; i++) {
       this.warnings[i].sprite.destroy();
     }
     this.warnings = [];
+
+    this.bossActive = false;
+    this.bossHp = 0;
+    this.bossMaxHp = 0;
+    this.bossEncounterCount = 0;
+    this.activeBoss = null;
+    this.bossRetreating = false;
+    this.bossTimerMs = 0;
+    this.bossAttackTimerMs = 0;
+    this.nextBossScoreMeters = GAME_CONFIG.BOSS_INTERVAL_METERS;
 
     this.distanceUntilNextPattern = 200;
     this.distanceSincePowerup = 0;
