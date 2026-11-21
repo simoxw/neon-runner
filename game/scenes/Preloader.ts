@@ -718,90 +718,179 @@ export class Preloader extends Phaser.Scene {
     [0, 1].forEach((frame) => {
       const key = `drone_${frame}`;
       if (this.textures.exists(key)) return;
-      const canvas = this.textures.createCanvas(key, 50, 42);
+      const canvas = this.textures.createCanvas(key, 68, 44);
       if (!canvas) return;
       const ctx = canvas.context;
 
-      // 2.5D faceted fuselage gradient
-      const hullGrad = ctx.createLinearGradient(10, 8, 42, 34);
-      hullGrad.addColorStop(0, '#2e335c');
-      hullGrad.addColorStop(0.55, '#1b1d36');
-      hullGrad.addColorStop(1, '#0e1022');
-      ctx.fillStyle = hullGrad;
+      // Red danger aura halo framing the enemy drone
+      const aura = ctx.createRadialGradient(34, 22, 6, 34, 22, 28);
+      aura.addColorStop(0, frame === 0 ? 'rgba(255, 32, 82, 0.42)' : 'rgba(255, 68, 56, 0.34)');
+      aura.addColorStop(0.6, 'rgba(255, 24, 68, 0.16)');
+      aura.addColorStop(1, 'rgba(255, 24, 68, 0)');
+      ctx.fillStyle = aura;
+      ctx.fillRect(0, 0, 68, 44);
+
+      // Rear crimson thruster flare
+      const flameLen = frame === 0 ? 15 : 10;
+      ctx.fillStyle = '#ff2a55';
       ctx.beginPath();
-      ctx.moveTo(8, 21);
-      ctx.lineTo(20, 8);
-      ctx.lineTo(38, 8);
-      ctx.lineTo(46, 21);
-      ctx.lineTo(38, 34);
-      ctx.lineTo(20, 34);
+      ctx.moveTo(49, 17);
+      ctx.lineTo(49 + flameLen, 22);
+      ctx.lineTo(49, 27);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ff9a62';
+      ctx.beginPath();
+      ctx.moveTo(49, 19);
+      ctx.lineTo(49 + flameLen * 0.6, 22);
+      ctx.lineTo(49, 25);
       ctx.closePath();
       ctx.fill();
 
-      ctx.strokeStyle = '#ff8a00';
+      // Swept-back angular blade wings + twin forward razor mandibles (pointing left)
+      const hullGrad = ctx.createLinearGradient(8, 6, 52, 38);
+      hullGrad.addColorStop(0, '#3a0d22');
+      hullGrad.addColorStop(0.5, '#1d0715');
+      hullGrad.addColorStop(1, '#0e040c');
+      ctx.fillStyle = hullGrad;
+      ctx.beginPath();
+      ctx.moveTo(4, 15);   // Upper forward razor blade tip
+      ctx.lineTo(26, 13);
+      ctx.lineTo(46, 4);   // Swept top wingtip
+      ctx.lineTo(54, 8);
+      ctx.lineTo(47, 18);
+      ctx.lineTo(52, 22);
+      ctx.lineTo(47, 26);
+      ctx.lineTo(54, 36);
+      ctx.lineTo(46, 40);  // Swept bottom wingtip
+      ctx.lineTo(26, 31);
+      ctx.lineTo(4, 29);   // Lower forward razor blade tip
+      ctx.lineTo(15, 22);  // Inner jaw notch
+      ctx.closePath();
+      ctx.fill();
+
+      // Razor crimson leading edge outline
+      ctx.strokeStyle = '#ff2a55';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Top rim highlight
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.fillRect(20, 10, 16, 2);
-
-      // Pulsing scanner optic with white specular glint
-      ctx.fillStyle = frame === 0 ? '#ff2a6d' : '#ffc857';
+      // Bright metallic crimson bevel along top blade edge
+      ctx.fillStyle = 'rgba(255, 115, 140, 0.55)';
       ctx.beginPath();
-      ctx.arc(24, 21, frame === 0 ? 7.5 : 5.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(22, 19, 2, 0, Math.PI * 2);
+      ctx.moveTo(8, 15.5);
+      ctx.lineTo(28, 14);
+      ctx.lineTo(46, 5.5);
+      ctx.lineTo(45, 7.5);
+      ctx.lineTo(27, 16);
+      ctx.closePath();
       ctx.fill();
 
-      // Twin hover turbine fins
-      ctx.fillStyle = '#00f3ff';
-      ctx.fillRect(18, frame === 0 ? 3 : 4, 15, 3);
-      ctx.fillRect(18, frame === 0 ? 36 : 35, 15, 3);
+      // Aggressive angular slit scanner optic (not round)
+      ctx.fillStyle = frame === 0 ? '#ff2a55' : '#ff6b35';
+      ctx.beginPath();
+      ctx.moveTo(19, 19);
+      ctx.lineTo(35, 17);
+      ctx.lineTo(32, 24);
+      ctx.lineTo(17, 23);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#ffd6dc';
+      ctx.fillRect(21, 19.5, 9, 2);
+
       canvas.refresh();
     });
 
     [0, 1].forEach((frame) => {
       const key = `drone_armored_${frame}`;
       if (this.textures.exists(key)) return;
-      const canvas = this.textures.createCanvas(key, 56, 48);
+      const canvas = this.textures.createCanvas(key, 74, 50);
       if (!canvas) return;
       const ctx = canvas.context;
 
-      const shellGrad = ctx.createLinearGradient(8, 8, 48, 40);
-      shellGrad.addColorStop(0, '#2c225c');
-      shellGrad.addColorStop(0.6, '#191335');
-      shellGrad.addColorStop(1, '#0c091e');
+      // Intense crimson-scarlet danger aura
+      const aura = ctx.createRadialGradient(37, 25, 8, 37, 25, 33);
+      aura.addColorStop(0, frame === 0 ? 'rgba(255, 36, 78, 0.48)' : 'rgba(255, 82, 50, 0.38)');
+      aura.addColorStop(0.65, 'rgba(255, 24, 68, 0.18)');
+      aura.addColorStop(1, 'rgba(255, 24, 68, 0)');
+      ctx.fillStyle = aura;
+      ctx.fillRect(0, 0, 74, 50);
+
+      // Twin rear jet plumes
+      const jetLen = frame === 0 ? 15 : 10;
+      for (const jy of [17, 33]) {
+        ctx.fillStyle = '#ff385c';
+        ctx.beginPath();
+        ctx.moveTo(54, jy - 3);
+        ctx.lineTo(54 + jetLen, jy);
+        ctx.lineTo(54, jy + 3);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Heavy armored interceptor blade chassis
+      const shellGrad = ctx.createLinearGradient(8, 5, 58, 45);
+      shellGrad.addColorStop(0, '#451029');
+      shellGrad.addColorStop(0.55, '#210817');
+      shellGrad.addColorStop(1, '#10040c');
       ctx.fillStyle = shellGrad;
       ctx.beginPath();
-      ctx.moveTo(6, 24);
-      ctx.lineTo(18, 7);
-      ctx.lineTo(41, 7);
-      ctx.lineTo(51, 24);
-      ctx.lineTo(41, 41);
-      ctx.lineTo(18, 41);
+      ctx.moveTo(3, 14);
+      ctx.lineTo(20, 12);
+      ctx.lineTo(31, 4);
+      ctx.lineTo(56, 5);
+      ctx.lineTo(61, 13);
+      ctx.lineTo(53, 21);
+      ctx.lineTo(58, 25);
+      ctx.lineTo(53, 29);
+      ctx.lineTo(61, 37);
+      ctx.lineTo(56, 45);
+      ctx.lineTo(31, 46);
+      ctx.lineTo(20, 38);
+      ctx.lineTo(3, 36);
+      ctx.lineTo(14, 25);
       ctx.closePath();
       ctx.fill();
 
-      ctx.strokeStyle = '#00f3ff';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ff2a55';
+      ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      // Angled gold armor plates
-      ctx.fillStyle = '#ffc857';
-      ctx.fillRect(18, 11, 20, 4.5);
-      ctx.fillRect(18, 32.5, 20, 4.5);
+      // Heavy angled hazard armor chevrons (amber-red, high contrast vs cyan pickups)
+      ctx.fillStyle = '#ff6b35';
+      ctx.beginPath();
+      ctx.moveTo(27, 9);
+      ctx.lineTo(48, 9);
+      ctx.lineTo(44, 14);
+      ctx.lineTo(24, 14);
+      ctx.closePath();
+      ctx.fill();
 
-      ctx.fillStyle = frame === 0 ? '#00f3ff' : '#ff2a6d';
       ctx.beginPath();
-      ctx.arc(27, 24, frame === 0 ? 7.5 : 5.5, 0, Math.PI * 2);
+      ctx.moveTo(24, 36);
+      ctx.lineTo(44, 36);
+      ctx.lineTo(48, 41);
+      ctx.lineTo(27, 41);
+      ctx.closePath();
       ctx.fill();
+
+      ctx.fillStyle = '#ffc857';
+      ctx.fillRect(32, 10.5, 11, 2);
+      ctx.fillRect(32, 37.5, 11, 2);
+
+      // Narrow fierce crimson slit visor
+      ctx.fillStyle = frame === 0 ? '#ff2a55' : '#ff9a3c';
+      ctx.beginPath();
+      ctx.moveTo(18, 21);
+      ctx.lineTo(39, 19);
+      ctx.lineTo(36, 28);
+      ctx.lineTo(16, 26);
+      ctx.closePath();
+      ctx.fill();
+
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(25, 22, 2.2, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(21, 22, 12, 2.5);
+
       canvas.refresh();
     });
   }

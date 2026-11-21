@@ -69,7 +69,25 @@ export function pickPowerupType(rng: () => number = Math.random): 'magnet' | 'sh
 
 export function computeBossMaxHp(bossIndex: number): number {
   const safeIndex = Math.max(1, Math.floor(bossIndex));
-  return Math.min(26, 10 + (safeIndex - 1) * 4);
+  return Math.min(22, 7 + (safeIndex - 1) * 4);
+}
+
+export function shouldPauseSpawnsForBoss(
+  scoreMeters: number,
+  nextBossScoreMeters: number,
+  bossActive: boolean
+): boolean {
+  return !bossActive && scoreMeters >= Math.max(0, nextBossScoreMeters - 38);
+}
+
+export function pickBossFixedLaneY(
+  laneIndex: number,
+  groundTop: number,
+  safeTopY: number
+): number {
+  const lowLaneY = groundTop - 36;
+  const highLaneY = Math.max(safeTopY + 32, groundTop - 132);
+  return Math.abs(Math.floor(laneIndex)) % 2 === 0 ? lowLaneY : highLaneY;
 }
 
 export function advanceLaserState(state: LaserState, deltaMs: number): LaserState {
@@ -182,6 +200,13 @@ export function shouldCollideWithGround(
 export function getMaxSingleJumpDistancePx(speedPxPerSec: number): number {
   const airTimeSec = (2 * Math.abs(GAME_CONFIG.PLAYER_JUMP_INITIAL)) / GAME_CONFIG.GRAVITY;
   return speedPxPerSec * airTimeSec;
+}
+
+export function getRoadChasmWidthBounds(speedPxPerSec: number): { min: number; max: number } {
+  const singleReach = getMaxSingleJumpDistancePx(speedPxPerSec);
+  const maxAllowed = Math.min(150, Math.max(108, Math.floor(singleReach - 82)));
+  const minAllowed = Math.max(92, maxAllowed - 26);
+  return { min: minAllowed, max: maxAllowed };
 }
 
 export type PatternId =

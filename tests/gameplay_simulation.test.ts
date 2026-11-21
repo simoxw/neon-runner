@@ -14,11 +14,13 @@ import {
   isOverRoadGap,
   LaserState,
   PatternId,
+  pickBossFixedLaneY,
   pickNextPattern,
   pickPowerupType,
   resetCombo,
   resolveDroneBulletHit,
   shouldCollideWithGround,
+  shouldPauseSpawnsForBoss,
   stepRunDistance,
   tickComboDecay,
 } from '../utils/gameRules';
@@ -139,15 +141,15 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
   });
 
   it('scales speed smoothly in Classic and Turbo modes and applies 1.5x Turbo credit bonus', () => {
-    expect(computeSpeedForScore(0, 'classic')).toBe(420);
-    expect(computeSpeedForScore(219, 'classic')).toBe(420);
-    expect(computeSpeedForScore(220, 'classic')).toBe(440);
-    expect(computeSpeedForScore(440, 'classic')).toBe(460);
-    expect(computeSpeedForScore(660, 'classic')).toBe(480);
+    expect(computeSpeedForScore(0, 'classic')).toBe(320);
+    expect(computeSpeedForScore(159, 'classic')).toBe(320);
+    expect(computeSpeedForScore(160, 'classic')).toBe(345);
+    expect(computeSpeedForScore(320, 'classic')).toBe(370);
+    expect(computeSpeedForScore(640, 'classic')).toBe(420);
     expect(computeSpeedForScore(99999, 'classic')).toBe(GAME_CONFIG.MAX_SPEED);
 
     expect(computeSpeedForScore(0, 'turbo')).toBe(GAME_CONFIG.TURBO_BASE_SPEED);
-    expect(computeSpeedForScore(220, 'turbo')).toBe(
+    expect(computeSpeedForScore(GAME_CONFIG.DIFFICULTY_INTERVAL_METERS, 'turbo')).toBe(
       GAME_CONFIG.TURBO_BASE_SPEED + GAME_CONFIG.TURBO_SPEED_INCREMENT
     );
     expect(computeSpeedForScore(99999, 'turbo')).toBe(GAME_CONFIG.TURBO_MAX_SPEED);
@@ -177,11 +179,23 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
     expect(ratio).toBeLessThan(0.75);
   });
 
-  it('scales Boss Drone max HP across encounters up to the cap', () => {
-    expect(computeBossMaxHp(1)).toBe(10);
-    expect(computeBossMaxHp(2)).toBe(14);
-    expect(computeBossMaxHp(3)).toBe(18);
-    expect(computeBossMaxHp(10)).toBe(26);
+  it('scales Boss Drone max HP from 7 HP and uses predictable fixed lanes with pre-Boss spawn pause', () => {
+    expect(computeBossMaxHp(1)).toBe(7);
+    expect(computeBossMaxHp(2)).toBe(11);
+    expect(computeBossMaxHp(3)).toBe(15);
+    expect(computeBossMaxHp(10)).toBe(22);
+
+    const groundTop = 624;
+    const safeTopY = 120;
+    const lane0 = pickBossFixedLaneY(0, groundTop, safeTopY);
+    const lane1 = pickBossFixedLaneY(1, groundTop, safeTopY);
+    expect(lane0).toBe(groundTop - 36);
+    expect(lane1).toBeLessThan(lane0 - 60);
+    expect(pickBossFixedLaneY(2, groundTop, safeTopY)).toBe(lane0);
+
+    expect(shouldPauseSpawnsForBoss(520, 600, false)).toBe(false);
+    expect(shouldPauseSpawnsForBoss(565, 600, false)).toBe(true);
+    expect(shouldPauseSpawnsForBoss(605, 1200, true)).toBe(false);
   });
 
   it('disables ground collision cleanly over road chasms, blocks edge-snapping once fallen, and hovers in Overdrive', () => {

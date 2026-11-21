@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_CONFIG, getGroundHeight, SECTORS_PALETTE } from '../constants';
-import { computeSectorIndex, getMaxSingleJumpDistancePx } from '../utils/gameRules';
+import {
+  computeSectorIndex,
+  getMaxSingleJumpDistancePx,
+  getRoadChasmWidthBounds,
+} from '../utils/gameRules';
 
 describe('Level Design & Physics Reachability Invariants', () => {
   it('ensures single + double jump easily clears the tall barrier (94px) across all speeds', () => {
@@ -53,10 +57,11 @@ describe('Level Design & Physics Reachability Invariants', () => {
     }
   });
 
-  it('guarantees single jump horizontal reach exceeds maximum road chasm width (152px) across all speeds', () => {
-    for (const speed of [GAME_CONFIG.BASE_SPEED, 540, 680, GAME_CONFIG.MAX_SPEED]) {
+  it('guarantees single jump horizontal reach exceeds speed-scaled road chasm width with >80px margin across all speeds', () => {
+    for (const speed of [GAME_CONFIG.BASE_SPEED, 420, 540, 680, GAME_CONFIG.MAX_SPEED]) {
       const maxJumpReach = getMaxSingleJumpDistancePx(speed);
-      expect(maxJumpReach).toBeGreaterThan(152 + 80);
+      const { max } = getRoadChasmWidthBounds(speed);
+      expect(maxJumpReach).toBeGreaterThan(max + 80);
     }
   });
 
