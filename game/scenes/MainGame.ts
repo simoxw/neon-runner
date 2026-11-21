@@ -13,6 +13,7 @@ import {
   computeCreditReward,
   computeSectorIndex,
   computeSpeedForScore,
+  isOverRoadGap,
   resetCombo,
   resolveDroneBulletHit,
   shouldCollideWithGround,
@@ -31,7 +32,9 @@ export class MainGame extends Phaser.Scene {
   public sky: Phaser.GameObjects.TileSprite | null = null;
   public cityFar: Phaser.GameObjects.TileSprite | null = null;
   public cityNear: Phaser.GameObjects.TileSprite | null = null;
+  public streetLamps: Phaser.GameObjects.TileSprite | null = null;
   public ground: Phaser.GameObjects.TileSprite | null = null;
+  public foregroundGirders: Phaser.GameObjects.TileSprite | null = null;
   public groundBody: Phaser.GameObjects.Rectangle | null = null;
 
   private sectorSun: Phaser.GameObjects.Image | null = null;
@@ -141,11 +144,35 @@ export class MainGame extends Phaser.Scene {
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(1.2);
+
+    const scaleY = gh / 96;
+    const deckBackPx = Math.round(14 * scaleY);
+    const totalGroundH = gh + deckBackPx;
+
+    if (this.textures.exists('street_lamps')) {
+      const lampH = Math.round(92 * scaleY);
+      this.streetLamps = this.add
+        .tileSprite(0, height - gh + Math.round(8 * scaleY) - lampH, width, lampH, 'street_lamps')
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setTileScale(1, scaleY)
+        .setDepth(2.4);
+    }
+
     this.ground = this.add
-      .tileSprite(0, height - gh, width, gh, 'ground')
+      .tileSprite(0, height - totalGroundH, width, totalGroundH, 'ground')
       .setOrigin(0, 0)
       .setScrollFactor(0)
+      .setTileScale(1, scaleY)
       .setDepth(2.5);
+
+    if (this.textures.exists('fg_girders')) {
+      this.foregroundGirders = this.add
+        .tileSprite(0, height - 56, width, 56, 'fg_girders')
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(13.5);
+    }
 
     this.groundBody = this.add.rectangle(width / 2, height - gh / 2, width, gh, 0x000000, 0);
     this.physics.add.existing(this.groundBody, true);
@@ -394,9 +421,24 @@ export class MainGame extends Phaser.Scene {
       this.cityNear.setPosition(0, height - gh - 260);
       this.cityNear.setSize(width, 340);
     }
+    const scaleY = gh / 96;
+    const deckBackPx = Math.round(14 * scaleY);
+    const totalGroundH = gh + deckBackPx;
+
+    if (this.streetLamps) {
+      const lampH = Math.round(92 * scaleY);
+      this.streetLamps.setPosition(0, height - gh + Math.round(8 * scaleY) - lampH);
+      this.streetLamps.setSize(width, lampH);
+      this.streetLamps.setTileScale(1, scaleY);
+    }
     if (this.ground) {
-      this.ground.setPosition(0, height - gh);
-      this.ground.setSize(width, gh);
+      this.ground.setPosition(0, height - totalGroundH);
+      this.ground.setSize(width, totalGroundH);
+      this.ground.setTileScale(1, scaleY);
+    }
+    if (this.foregroundGirders) {
+      this.foregroundGirders.setPosition(0, height - 56);
+      this.foregroundGirders.setSize(width, 56);
     }
     if (this.groundBody) {
       this.groundBody.setPosition(width / 2, height - gh / 2);
@@ -462,6 +504,7 @@ export class MainGame extends Phaser.Scene {
     this.sky?.setTint(palette.skyTint);
     this.cityFar?.setTint(palette.cityFarTint);
     this.cityNear?.setTint(palette.cityNearTint);
+    this.streetLamps?.setTint(palette.cityNearTint);
     this.ground?.setTint(palette.groundTint);
     this.applySectorEnvironment(sectorIdx, true);
   }
@@ -584,6 +627,7 @@ export class MainGame extends Phaser.Scene {
     tweenTint(this.sky, palette.skyTint);
     tweenTint(this.cityFar, palette.cityFarTint);
     tweenTint(this.cityNear, palette.cityNearTint);
+    tweenTint(this.streetLamps, palette.cityNearTint);
     tweenTint(this.ground, palette.groundTint);
 
     soundEngine.playSectorChange();
@@ -599,9 +643,15 @@ export class MainGame extends Phaser.Scene {
       if (this.sky) this.sky.tilePositionX += 0.02 * delta;
       if (this.cityFar) this.cityFar.tilePositionX += 0.06 * delta;
       if (this.cityNear) this.cityNear.tilePositionX += 0.12 * delta;
+      if (this.streetLamps) this.streetLamps.tilePositionX += 0.22 * delta;
       if (this.ground) this.ground.tilePositionX += 0.22 * delta;
+      if (this.foregroundGirders) this.foregroundGirders.tilePositionX += 0.30 * delta;
       this.updateAmbientAtmosphere(time, delta);
-      if (this.player) this.player.update(time, delta, false);
+      if (this.player) {
+        this.player.update(time, delta, false);
+        const gh = getGroundHeight(this.scale.height);
+        this.player.updateShadow(this.scale.height - gh, false);
+      }
       return;
     }
 
@@ -645,7 +695,9 @@ export class MainGame extends Phaser.Scene {
     if (this.sky) this.sky.tilePositionX += effectiveSpeed * 0.00008 * delta;
     if (this.cityFar) this.cityFar.tilePositionX += effectiveSpeed * 0.00024 * delta;
     if (this.cityNear) this.cityNear.tilePositionX += effectiveSpeed * 0.00048 * delta;
+    if (this.streetLamps) this.streetLamps.tilePositionX += effectiveSpeed * 0.001 * delta;
     if (this.ground) this.ground.tilePositionX += effectiveSpeed * 0.001 * delta;
+    if (this.foregroundGirders) this.foregroundGirders.tilePositionX += effectiveSpeed * 0.00135 * delta;
 
     if (this.player) {
       this.player.update(time, delta, true);
@@ -656,6 +708,9 @@ export class MainGame extends Phaser.Scene {
         this.triggerFallGameOver();
         return;
       }
+
+      const gaps = this.obstacleManager ? this.obstacleManager.getActiveGapSpans() : [];
+      this.player.updateShadow(groundTop, isOverRoadGap(this.player.x, gaps));
 
       if (
         (this.player.shieldRemaining > 0 ||

@@ -1,6 +1,13 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG, getGroundHeight } from '../../constants';
-import { advanceLaserState, LaserPhase, RoadGapSpan } from '../../utils/gameRules';
+import {
+  advanceLaserState,
+  isChasmPattern,
+  LaserPhase,
+  PatternId,
+  pickNextPattern,
+  RoadGapSpan,
+} from '../../utils/gameRules';
 import { soundEngine } from '../../utils/sound';
 import { Player } from './Player';
 
@@ -27,6 +34,8 @@ export class ObstacleManager {
   private distanceSincePowerup: number = 0;
   private distanceSinceMissile: number = 0;
   private nextMissileDistance: number = 1400;
+  private recentPatterns: PatternId[] = [];
+  private chainRemaining: number = 0;
   private warnings: ActiveMissileWarning[] = [];
 
   constructor(scene: Phaser.Scene) {
@@ -34,17 +43,17 @@ export class ObstacleManager {
 
     this.barriers = scene.physics.add.group({
       defaultKey: 'barrier',
-      maxSize: GAME_CONFIG.POOL_SIZE,
+      maxSize: 20,
     });
 
     this.lasers = scene.physics.add.group({
       defaultKey: 'laser_gate_warn',
-      maxSize: 6,
+      maxSize: 8,
     });
 
     this.drones = scene.physics.add.group({
       defaultKey: 'drone_0',
-      maxSize: 12,
+      maxSize: 16,
     });
 
     this.missiles = scene.physics.add.group({
@@ -54,22 +63,22 @@ export class ObstacleManager {
 
     this.platforms = scene.physics.add.group({
       defaultKey: 'sky_platform',
-      maxSize: 8,
+      maxSize: 12,
     });
 
     this.roadGaps = scene.physics.add.group({
       defaultKey: 'road_gap',
-      maxSize: 6,
+      maxSize: 8,
     });
 
     this.boostRings = scene.physics.add.group({
       defaultKey: 'boost_ring',
-      maxSize: 6,
+      maxSize: 8,
     });
 
     this.coins = scene.physics.add.group({
       defaultKey: 'coin_0',
-      maxSize: 36,
+      maxSize: 48,
     });
 
     this.powerups = scene.physics.add.group({
@@ -93,10 +102,25 @@ export class ObstacleManager {
     this.distanceSinceMissile += dx;
 
     if (this.distanceUntilNextPattern <= 0) {
-      const patternWidth = this.spawnPattern(speed, scoreMeters);
-      const minSafeGap = Math.max(290, speed * 0.66);
-      const maxGap = Math.max(430, speed * 0.96);
-      this.distanceUntilNextPattern = patternWidth + Phaser.Math.Between(minSafeGap, maxGap);
+      const spawned = this.spawnPattern(speed, scoreMeters);
+      if (this.chainRemaining > 0) {
+        this.chainRemaining -= 1;
+        const recoveryGap = spawned.isChasm
+          ? Math.max(295, speed * 0.65)
+          : Math.max(285, speed * 0.64);
+        const maxGap = Math.max(430, speed * 0.94);
+        this.distanceUntilNextPattern = spawned.width + Phaser.Math.Between(recoveryGap, maxGap);
+      } else if (spawned.startsChain) {
+        this.chainRemaining = 1;
+        const chainGap = Math.max(198, speed * 0.45);
+        this.distanceUntilNextPattern = spawned.width + chainGap;
+      } else {
+        const minSafeGap = spawned.isChasm
+          ? Math.max(295, speed * 0.65)
+          : Math.max(285, speed * 0.64);
+        const maxGap = Math.max(430, speed * 0.94);
+        this.distanceUntilNextPattern = spawned.width + Phaser.Math.Between(minSafeGap, maxGap);
+      }
     }
 
     // Trigger Jetpack Joyride-style missile warning periodically after 80m
@@ -322,7 +346,10 @@ export class ObstacleManager {
     }
   }
 
-  private spawnPattern(speed: number, scoreMeters: number): number {
+  private spawnPattern(
+    speed: number,
+    scoreMeters: number
+  ): { width: number; isChasm: boolean; startsChain: boolean } {
     const { width, height } = this.scene.scale;
     const gh = getGroundHeight(height);
     const groundTop = height - gh;
@@ -345,142 +372,237 @@ export class ObstacleManager {
         speed,
         safeTopY
       );
-      return 220;
+      return { width: 220, isChasm: false, startsChain: false };
     }
 
     const sector2Unlocked = scoreMeters >= GAME_CONFIG.SECTOR_INTERVAL_METERS;
-    const chasmsUnlocked = scoreMeters >= 35;
-    const roll = Phaser.Math.Between(0, 99);
+    const selection = pickNextPattern(scoreMeters, this.recentPatterns);
+    this.recentPatterns = selection.nextRecent;
+    const patternId = selection.patternId;
+    const startsChain = this.chainRemaining === 0 && selection.startsChain;
+    const isChasm = isChasmPattern(patternId);
 
-    if (roll < 13) {
-      // Pattern 1: Single low barrier + rewarding coin arc overhead
-      this.spawnBarrier(startX, groundTop, false, speed);
-      this.spawnCoinArc(
-        startX - 45,
-        clampY(groundTop - Math.min(92, usableHeight * 0.48)),
-        3,
-        speed,
-        safeTopY
-      );
-      return 120;
-    } else if (roll < 26) {
-      // Pattern 2: Tall barrier (encourages holding jump or double jump) + coin trail
-      this.spawnBarrier(startX, groundTop, true, speed);
-      this.spawnCoinArc(
-        startX + 55,
-        clampY(groundTop - Math.min(138, usableHeight * 0.68)),
-        4,
-        speed,
-        safeTopY
-      );
-      return 190;
-    } else if (roll < 41) {
-      // Pattern 3: Destructible Cyber Drone(s) — includes Armored Drones in Sector 2+
-      const droneCount = speed > 560 ? 2 : 1;
-      const minDroneY = safeTopY + 14;
-      const maxDroneY = Math.max(minDroneY + 10, groundTop - 75);
-      for (let i = 0; i < droneCount; i++) {
-        const dy = Phaser.Math.Between(minDroneY, maxDroneY);
-        const armored = sector2Unlocked && (i === 1 || Phaser.Math.Between(0, 99) < 42);
-        this.spawnDrone(startX + i * 175, dy, speed, armored);
-      }
-      this.spawnCoinLine(startX + 30, clampY(groundTop - 44), 3, speed);
-      return droneCount === 2 ? 230 : 130;
-    } else if (roll < 52) {
-      // Pattern 4: Low barrier followed by hovering drone
-      this.spawnBarrier(startX, groundTop, false, speed);
-      const spacing = Math.max(250, speed * 0.52);
-      const droneY = clampY(groundTop - Math.min(130, usableHeight * 0.6));
-      this.spawnDrone(startX + spacing, droneY, speed, sector2Unlocked && Phaser.Math.Between(0, 1) === 1);
-      this.spawnCoinArc(startX + spacing * 0.45, droneY, 3, speed, safeTopY);
-      return spacing + 80;
-    } else if (roll < 65) {
-      // Pattern 5: Multi-Level Sky Platform Staircase + Aerial Boost Ring
-      const midLift = Math.min(115, Math.max(82, usableHeight * 0.44));
-      const highLift = Math.min(usableHeight - 28, Math.max(midLift + 54, usableHeight * 0.74));
-      const midY = clampY(groundTop - midLift);
-      const highY = clampY(groundTop - highLift);
-
-      const firstX = startX + 75;
-      const secondX = firstX + 260;
-
-      this.spawnPlatform(firstX, midY, speed);
-      this.spawnCoinLine(firstX - 44, Math.max(safeTopY, midY - 28), 3, speed);
-
-      this.spawnPlatform(secondX, highY, speed);
-      this.spawnCoinLine(secondX - 64, Math.max(safeTopY, highY - 28), 4, speed);
-      this.spawnBoostRing(firstX + 130, Math.max(safeTopY + 12, (midY + highY) / 2 - 22), speed);
-
-      // Lower-route challenge: barrier under first platform or drone under second
-      if (Phaser.Math.Between(0, 1) === 1) {
-        this.spawnBarrier(firstX, groundTop, false, speed);
-      } else {
-        this.spawnDrone(secondX, clampY(groundTop - 52), speed, false);
-      }
-
-      return 430;
-    } else if (roll < 76) {
-      // Pattern 6: Dual-Path Sky Rail Gauntlet (Upper high-speed coins vs Lower barriers)
-      const railLift = Math.min(132, Math.max(90, usableHeight * 0.52));
-      const railY = clampY(groundTop - railLift);
-
-      const p1X = startX + 80;
-      const p2X = p1X + 245;
-
-      this.spawnPlatform(p1X, railY, speed);
-      this.spawnPlatform(p2X, railY - 14, speed);
-      this.spawnCoinLine(p1X - 44, Math.max(safeTopY, railY - 28), 3, speed);
-      this.spawnCoinArc(p2X - 44, Math.max(safeTopY + 12, railY - 46), 4, speed, safeTopY);
-
-      this.spawnBarrier(p1X - 10, groundTop, false, speed);
-      this.spawnBarrier(p2X + 10, groundTop, false, speed);
-
-      return 450;
-    } else if (roll < 91 && chasmsUnlocked) {
-      // Pattern 7: True Road Chasm (fatal fall if missed, with guiding coin arc or high sky bypass)
-      const gapWidth = Phaser.Math.Between(122, 150);
-      const gapCenterX = startX + 95;
-      this.spawnRoadGap(gapCenterX, gapWidth, gh, height, speed);
-
-      if (Phaser.Math.Between(0, 1) === 0) {
+    switch (patternId) {
+      case 'single_barrier': {
+        this.spawnBarrier(startX, groundTop, false, speed);
         this.spawnCoinArc(
-          gapCenterX - 44,
-          clampY(groundTop - Math.min(96, usableHeight * 0.48)),
+          startX - 45,
+          clampY(groundTop - Math.min(92, usableHeight * 0.48)),
           3,
           speed,
           safeTopY
         );
-        return 220;
-      } else {
-        const highY = clampY(groundTop - Math.min(126, Math.max(88, usableHeight * 0.56)));
-        this.spawnPlatform(gapCenterX + 135, highY, speed);
-        this.spawnCoinLine(gapCenterX + 91, Math.max(safeTopY, highY - 28), 3, speed);
-        this.spawnBoostRing(
-          gapCenterX + 18,
-          Math.max(safeTopY + 14, highY - 18),
-          speed
+        return { width: 120, isChasm, startsChain };
+      }
+
+      case 'double_barrier_rhythm': {
+        const hopSpacing = Math.max(215, speed * 0.45);
+        this.spawnBarrier(startX, groundTop, false, speed);
+        this.spawnBarrier(startX + hopSpacing, groundTop, false, speed);
+        this.spawnCoinArc(
+          startX - 35,
+          clampY(groundTop - Math.min(92, usableHeight * 0.46)),
+          3,
+          speed,
+          safeTopY
         );
-        return 350;
+        this.spawnCoinArc(
+          startX + hopSpacing - 35,
+          clampY(groundTop - Math.min(98, usableHeight * 0.5)),
+          3,
+          speed,
+          safeTopY
+        );
+        return { width: hopSpacing + 90, isChasm, startsChain };
       }
-    } else if (roll < 96 && sector2Unlocked) {
-      // Pattern 8 (Sector 2+): Intermittent Laser Gate + Elevated Safe Sky Bypass + Boost Ring
-      const gateY = groundTop - 66;
-      const bypassLift = Math.min(usableHeight - 24, Math.max(122, usableHeight * 0.62));
-      const bypassY = clampY(groundTop - bypassLift);
 
-      this.spawnPlatform(startX + 40, bypassY, speed);
-      this.spawnCoinLine(startX - 4, Math.max(safeTopY, bypassY - 28), 3, speed);
-      this.spawnLaserGate(startX + 240, gateY, speed);
-      this.spawnBoostRing(startX + 240, Math.max(safeTopY + 16, bypassY - 36), speed);
-
-      return 340;
-    } else {
-      // Pattern 9: Safe coin streak + occasional high Boost Ring
-      this.spawnCoinLine(startX, clampY(groundTop - 48), 5, speed);
-      if (Phaser.Math.Between(0, 1) === 1) {
-        this.spawnBoostRing(startX + 85, clampY(groundTop - Math.min(148, usableHeight * 0.68)), speed);
+      case 'tall_barrier': {
+        this.spawnBarrier(startX, groundTop, true, speed);
+        this.spawnCoinArc(
+          startX + 55,
+          clampY(groundTop - Math.min(138, usableHeight * 0.68)),
+          4,
+          speed,
+          safeTopY
+        );
+        return { width: 190, isChasm, startsChain };
       }
-      return 190;
+
+      case 'drone_squad': {
+        const droneCount = speed > 540 ? 2 : 1;
+        const minDroneY = safeTopY + 14;
+        const maxDroneY = Math.max(minDroneY + 10, groundTop - 75);
+        for (let i = 0; i < droneCount; i++) {
+          const dy = Phaser.Math.Between(minDroneY, maxDroneY);
+          const armored = sector2Unlocked && (i === 1 || Phaser.Math.Between(0, 99) < 42);
+          this.spawnDrone(startX + i * 175, dy, speed, armored);
+        }
+        this.spawnCoinLine(startX + 30, clampY(groundTop - 44), 3, speed);
+        return { width: droneCount === 2 ? 230 : 130, isChasm, startsChain };
+      }
+
+      case 'drone_swarms': {
+        const count = speed > 580 ? 3 : 2;
+        const rising = Phaser.Math.Between(0, 1) === 0;
+        for (let i = 0; i < count; i++) {
+          const ratio = rising ? 0.32 + i * 0.2 : 0.72 - i * 0.2;
+          const dy = clampY(groundTop - Math.min(usableHeight - 16, usableHeight * ratio));
+          const armored = sector2Unlocked && i === count - 1;
+          this.spawnDrone(startX + i * 145, dy, speed, armored);
+        }
+        this.spawnCoinLine(startX + 20, clampY(groundTop - 44), 4, speed);
+        return { width: count === 3 ? 340 : 210, isChasm, startsChain };
+      }
+
+      case 'barrier_then_drone': {
+        const tallFirst = speed > 520 && Phaser.Math.Between(0, 1) === 1;
+        this.spawnBarrier(startX, groundTop, tallFirst, speed);
+        const spacing = Math.max(245, speed * 0.5);
+        const droneY = clampY(groundTop - Math.min(130, usableHeight * 0.6));
+        this.spawnDrone(
+          startX + spacing,
+          droneY,
+          speed,
+          sector2Unlocked && Phaser.Math.Between(0, 1) === 1
+        );
+        this.spawnCoinArc(startX + spacing * 0.45, droneY, 3, speed, safeTopY);
+        return { width: spacing + 80, isChasm, startsChain };
+      }
+
+      case 'sky_staircase': {
+        const midLift = Math.min(115, Math.max(82, usableHeight * 0.44));
+        const highLift = Math.min(usableHeight - 28, Math.max(midLift + 54, usableHeight * 0.74));
+        const midY = clampY(groundTop - midLift);
+        const highY = clampY(groundTop - highLift);
+
+        const firstX = startX + 75;
+        const secondX = firstX + 260;
+
+        this.spawnPlatform(firstX, midY, speed);
+        this.spawnCoinLine(firstX - 44, Math.max(safeTopY, midY - 28), 3, speed);
+
+        this.spawnPlatform(secondX, highY, speed);
+        this.spawnCoinLine(secondX - 64, Math.max(safeTopY, highY - 28), 4, speed);
+        this.spawnBoostRing(firstX + 130, Math.max(safeTopY + 12, (midY + highY) / 2 - 22), speed);
+
+        if (Phaser.Math.Between(0, 1) === 1) {
+          this.spawnBarrier(firstX, groundTop, false, speed);
+        } else {
+          this.spawnDrone(secondX, clampY(groundTop - 52), speed, false);
+        }
+
+        return { width: 430, isChasm, startsChain };
+      }
+
+      case 'sky_rail_gauntlet': {
+        const railLift = Math.min(132, Math.max(90, usableHeight * 0.52));
+        const railY = clampY(groundTop - railLift);
+
+        const p1X = startX + 80;
+        const p2X = p1X + 245;
+
+        this.spawnPlatform(p1X, railY, speed);
+        this.spawnPlatform(p2X, railY - 14, speed);
+        this.spawnCoinLine(p1X - 44, Math.max(safeTopY, railY - 28), 3, speed);
+        this.spawnCoinArc(p2X - 44, Math.max(safeTopY + 12, railY - 46), 4, speed, safeTopY);
+
+        this.spawnBarrier(p1X - 10, groundTop, false, speed);
+        this.spawnBarrier(p2X + 10, groundTop, false, speed);
+
+        return { width: 450, isChasm, startsChain };
+      }
+
+      case 'sky_slalom': {
+        const midY = clampY(groundTop - Math.min(118, Math.max(82, usableHeight * 0.46)));
+        const pX = startX + 85;
+        this.spawnPlatform(pX, midY, speed);
+        this.spawnCoinLine(pX - 44, Math.max(safeTopY, midY - 28), 3, speed);
+        this.spawnDrone(pX + 190, clampY(midY - 24), speed, sector2Unlocked);
+        this.spawnBoostRing(pX + 290, clampY(groundTop - Math.min(140, usableHeight * 0.62)), speed);
+        this.spawnBarrier(pX + 180, groundTop, false, speed);
+        return { width: 390, isChasm, startsChain };
+      }
+
+      case 'road_chasm': {
+        const gapWidth = Phaser.Math.Between(122, 150);
+        const gapCenterX = startX + 95;
+        this.spawnRoadGap(gapCenterX, gapWidth, gh, height, speed);
+
+        if (Phaser.Math.Between(0, 1) === 0) {
+          this.spawnCoinArc(
+            gapCenterX - 44,
+            clampY(groundTop - Math.min(96, usableHeight * 0.48)),
+            3,
+            speed,
+            safeTopY
+          );
+          return { width: 220, isChasm: true, startsChain: false };
+        } else {
+          const highY = clampY(groundTop - Math.min(126, Math.max(88, usableHeight * 0.56)));
+          this.spawnPlatform(gapCenterX + 135, highY, speed);
+          this.spawnCoinLine(gapCenterX + 91, Math.max(safeTopY, highY - 28), 3, speed);
+          this.spawnBoostRing(
+            gapCenterX + 18,
+            Math.max(safeTopY + 14, highY - 18),
+            speed
+          );
+          return { width: 350, isChasm: true, startsChain: false };
+        }
+      }
+
+      case 'double_chasm_bridge': {
+        const g1W = Phaser.Math.Between(122, 138);
+        const g2W = Phaser.Math.Between(122, 138);
+        const g1X = startX + 90;
+        const g2X = g1X + 360;
+        const midBridgeY = clampY(groundTop - Math.min(108, Math.max(80, usableHeight * 0.48)));
+
+        this.spawnRoadGap(g1X, g1W, gh, height, speed);
+        this.spawnPlatform(g1X + 180, midBridgeY, speed);
+        this.spawnCoinLine(g1X + 136, Math.max(safeTopY, midBridgeY - 28), 3, speed);
+        this.spawnBoostRing(g1X + 270, Math.max(safeTopY + 18, midBridgeY - 36), speed);
+        this.spawnRoadGap(g2X, g2W, gh, height, speed);
+        this.spawnCoinArc(g2X - 44, clampY(groundTop - Math.min(96, usableHeight * 0.48)), 3, speed, safeTopY);
+
+        return { width: 520, isChasm: true, startsChain: false };
+      }
+
+      case 'laser_bypass': {
+        const gateY = groundTop - 68;
+        const bypassLift = Math.min(usableHeight - 24, Math.max(122, usableHeight * 0.62));
+        const bypassY = clampY(groundTop - bypassLift);
+
+        this.spawnPlatform(startX + 40, bypassY, speed);
+        this.spawnCoinLine(startX - 4, Math.max(safeTopY, bypassY - 28), 3, speed);
+        this.spawnLaserGate(startX + 240, gateY, speed);
+        this.spawnBoostRing(startX + 240, Math.max(safeTopY + 16, bypassY - 36), speed);
+
+        return { width: 340, isChasm, startsChain };
+      }
+
+      case 'laser_drone_cross': {
+        const gateY = groundTop - 68;
+        const highY = clampY(groundTop - Math.min(usableHeight - 24, Math.max(124, usableHeight * 0.64)));
+        this.spawnDrone(startX + 50, clampY(groundTop - 86), speed, true);
+        this.spawnPlatform(startX + 215, highY, speed);
+        this.spawnCoinLine(startX + 175, Math.max(safeTopY, highY - 28), 3, speed);
+        this.spawnLaserGate(startX + 240, gateY, speed);
+        return { width: 360, isChasm, startsChain };
+      }
+
+      case 'coin_wave':
+      default: {
+        const waveBase = clampY(groundTop - Math.min(96, usableHeight * 0.45));
+        const waveAmp = Math.min(46, usableHeight * 0.25);
+        for (let i = 0; i < 6; i++) {
+          const cy = clampY(waveBase - Math.sin((i / 5) * Math.PI) * waveAmp);
+          this.spawnSingleCoin(startX + i * 44, cy, speed);
+        }
+        if (Phaser.Math.Between(0, 1) === 1) {
+          this.spawnBoostRing(startX + 130, clampY(groundTop - Math.min(148, usableHeight * 0.68)), speed);
+        }
+        return { width: 250, isChasm: false, startsChain };
+      }
     }
   }
 
@@ -502,14 +624,16 @@ export class ObstacleManager {
 
   public syncRoadGapHeights(viewportHeight: number) {
     const gh = getGroundHeight(viewportHeight);
-    const centerY = viewportHeight - gh / 2;
+    const deckBackPx = Math.round(14 * (gh / 96));
+    const totalVisualH = gh + deckBackPx;
+    const centerY = viewportHeight - totalVisualH / 2;
     const children = this.roadGaps.getChildren();
     for (let i = 0; i < children.length; i++) {
       const gap = children[i] as Phaser.Physics.Arcade.Sprite;
       if (gap && gap.active) {
         const w = (gap.getData('gapWidth') as number) || 140;
         gap.y = centerY;
-        gap.setDisplaySize(w, gh);
+        gap.setDisplaySize(w, totalVisualH);
       }
     }
   }
@@ -521,12 +645,14 @@ export class ObstacleManager {
     viewportHeight: number,
     speed: number
   ) {
-    const centerY = viewportHeight - groundHeight / 2;
+    const deckBackPx = Math.round(14 * (groundHeight / 96));
+    const totalVisualH = groundHeight + deckBackPx;
+    const centerY = viewportHeight - totalVisualH / 2;
     const gap = this.roadGaps.get(centerX, centerY, 'road_gap') as Phaser.Physics.Arcade.Sprite | null;
     if (gap) {
       gap.setData('gapWidth', gapWidth);
       gap.enableBody(true, centerX, centerY, true, true);
-      gap.setDisplaySize(gapWidth, groundHeight);
+      gap.setDisplaySize(gapWidth, totalVisualH);
       gap.setDepth(3);
       if (gap.body) {
         const body = gap.body as Phaser.Physics.Arcade.Body;
@@ -552,7 +678,7 @@ export class ObstacleManager {
         body.checkCollision.left = false;
         body.checkCollision.right = false;
         body.setSize(176, 16);
-        body.setOffset(2, 0);
+        body.setOffset(2, 2);
         platform.setVelocityX(-speed);
       }
     }
@@ -560,7 +686,7 @@ export class ObstacleManager {
 
   private spawnBarrier(x: number, groundTop: number, tall: boolean, speed: number) {
     const key = tall ? 'barrier_tall' : 'barrier';
-    const halfH = tall ? 47 : 29;
+    const halfH = tall ? 46 : 28;
     const y = groundTop - halfH;
 
     const obs = this.barriers.get(x, y, key) as Phaser.Physics.Arcade.Sprite | null;
@@ -573,7 +699,7 @@ export class ObstacleManager {
         body.setAllowGravity(false);
         body.immovable = true;
         body.setSize(tall ? 26 : 24, tall ? 86 : 50);
-        body.setOffset(tall ? 9 : 8, tall ? 6 : 6);
+        body.setOffset(tall ? 11 : 10, 8);
         obs.setVelocityX(-speed);
       }
     }
@@ -592,7 +718,7 @@ export class ObstacleManager {
         body.setAllowGravity(false);
         body.immovable = true;
         body.setSize(12, 112);
-        body.setOffset(10, 10);
+        body.setOffset(12, 11);
         laser.setVelocityX(-speed);
       }
     }
@@ -607,7 +733,7 @@ export class ObstacleManager {
         const body = ring.body as Phaser.Physics.Arcade.Body;
         body.setAllowGravity(false);
         body.setSize(28, 52);
-        body.setOffset(4, 5);
+        body.setOffset(6, 6);
         ring.setVelocityX(-speed);
       }
     }
@@ -630,7 +756,7 @@ export class ObstacleManager {
         body.setAllowGravity(false);
         body.immovable = true;
         body.setSize(armored ? 38 : 34, armored ? 30 : 26);
-        body.setOffset(7, 7);
+        body.setOffset(armored ? 9 : 8, armored ? 9 : 8);
         drone.setVelocityX(-speed * (armored ? 1.06 : 1.12));
       }
     }
@@ -719,5 +845,7 @@ export class ObstacleManager {
     this.distanceSincePowerup = 0;
     this.distanceSinceMissile = 0;
     this.nextMissileDistance = 1400;
+    this.recentPatterns = [];
+    this.chainRemaining = 0;
   }
 }

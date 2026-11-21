@@ -161,3 +161,98 @@ export function getMaxSingleJumpDistancePx(speedPxPerSec: number): number {
   return speedPxPerSec * airTimeSec;
 }
 
+export type PatternId =
+  | 'single_barrier'
+  | 'double_barrier_rhythm'
+  | 'tall_barrier'
+  | 'drone_squad'
+  | 'drone_swarms'
+  | 'barrier_then_drone'
+  | 'sky_staircase'
+  | 'sky_rail_gauntlet'
+  | 'sky_slalom'
+  | 'road_chasm'
+  | 'double_chasm_bridge'
+  | 'laser_bypass'
+  | 'laser_drone_cross'
+  | 'coin_wave';
+
+export function getEligiblePatterns(scoreMeters: number): PatternId[] {
+  const base: PatternId[] = [
+    'single_barrier',
+    'double_barrier_rhythm',
+    'tall_barrier',
+    'drone_squad',
+    'drone_swarms',
+    'barrier_then_drone',
+    'sky_staircase',
+    'sky_rail_gauntlet',
+    'sky_slalom',
+    'coin_wave',
+  ];
+
+  if (scoreMeters >= 35) {
+    base.push('road_chasm');
+  }
+  if (scoreMeters >= 120) {
+    base.push('double_chasm_bridge');
+  }
+  if (scoreMeters >= GAME_CONFIG.SECTOR_INTERVAL_METERS) {
+    base.push('laser_bypass', 'laser_drone_cross');
+  }
+
+  return base;
+}
+
+export function isChasmPattern(patternId: PatternId): boolean {
+  return patternId === 'road_chasm' || patternId === 'double_chasm_bridge';
+}
+
+export function pickNextPattern(
+  scoreMeters: number,
+  recentPatterns: PatternId[],
+  rng: () => number = Math.random
+): {
+  patternId: PatternId;
+  nextRecent: PatternId[];
+  startsChain: boolean;
+} {
+  const eligible = getEligiblePatterns(scoreMeters);
+  const blocked = new Set(recentPatterns.slice(-3));
+  let candidates = eligible.filter((id) => !blocked.has(id));
+
+  if (candidates.length === 0) {
+    const lastId = recentPatterns[recentPatterns.length - 1];
+    candidates = eligible.filter((id) => id !== lastId);
+    if (candidates.length === 0) {
+      candidates = eligible;
+    }
+  }
+
+  // Keep road chasms slightly less frequent than standard modules (~15-20% max weight)
+  const weightedPool: PatternId[] = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const id = candidates[i];
+    const weight = id === 'coin_wave' ? 1 : isChasmPattern(id) ? 2 : 2;
+    for (let w = 0; w < weight; w++) {
+      weightedPool.push(id);
+    }
+  }
+
+  const pickIndex = Math.min(
+    weightedPool.length - 1,
+    Math.max(0, Math.floor(rng() * weightedPool.length))
+  );
+  const patternId = weightedPool[pickIndex];
+  const nextRecent = [...recentPatterns, patternId].slice(-3);
+
+  // Chained 2-module wave chance ramps gently from 22% early up to 48% in Sector 3+
+  const chainChance = scoreMeters < 80 ? 0 : Math.min(0.48, 0.22 + (scoreMeters / 1200) * 0.26);
+  const startsChain = !isChasmPattern(patternId) && rng() < chainChance;
+
+  return {
+    patternId,
+    nextRecent,
+    startsChain,
+  };
+}

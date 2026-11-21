@@ -19,6 +19,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   public shieldRing: Phaser.GameObjects.Arc;
   public magnetRing: Phaser.GameObjects.Arc;
   public overdriveRing: Phaser.GameObjects.Arc;
+  public groundShadow: Phaser.GameObjects.Image | null = null;
+  public playerGlow: Phaser.GameObjects.Image | null = null;
+  private muzzleFlash: Phaser.GameObjects.Image | null = null;
+  private muzzleFlashMs: number = 0;
 
   private jetpackBarBg: Phaser.GameObjects.Rectangle;
   private jetpackBarFill: Phaser.GameObjects.Rectangle;
@@ -116,6 +120,30 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.jetpackBarFill.setDepth(12);
     this.jetpackBarFill.setVisible(false);
 
+    if (scene.textures.exists('shadow_oval')) {
+      this.groundShadow = scene.add
+        .image(x, y + 30, 'shadow_oval')
+        .setDepth(4.2)
+        .setAlpha(0.75);
+    }
+
+    if (scene.textures.exists('glow_soft')) {
+      this.playerGlow = scene.add
+        .image(x, y, 'glow_soft')
+        .setDepth(8.8)
+        .setScale(0.78)
+        .setAlpha(0.24)
+        .setBlendMode(Phaser.BlendModes.ADD);
+
+      this.muzzleFlash = scene.add
+        .image(x + 28, y - 2, 'glow_soft')
+        .setDepth(10.5)
+        .setScale(0.28)
+        .setAlpha(0)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false);
+    }
+
     this.bullets = scene.physics.add.group({
       defaultKey: 'bullet',
       maxSize: 16,
@@ -185,6 +213,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.setTint(0xffe066);
       if (this.particles) this.particles.particleTint = 0xffc857;
       if (this.burstParticles) this.burstParticles.particleTint = 0xffc857;
+      this.playerGlow?.setTint(0xffc857).setScale(1.1).setAlpha(0.46);
       this.jetpackBarFill.setFillStyle(0xffc857, 1);
     } else {
       if (skin.bodyTint === 0xffffff) {
@@ -194,6 +223,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
       if (this.particles) this.particles.particleTint = skin.trailTint;
       if (this.burstParticles) this.burstParticles.particleTint = skin.trailTint;
+      this.playerGlow?.setTint(skin.trailTint).setScale(0.78).setAlpha(0.24);
       this.jetpackBarFill.setFillStyle(skin.trailTint, 1);
     }
   }
@@ -341,12 +371,39 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     });
   }
 
+  public updateShadow(groundTop: number, overGap: boolean) {
+    if (!this.groundShadow) return;
+    if (this.isDead || overGap || this.y > groundTop - 16) {
+      this.groundShadow.setVisible(false);
+      return;
+    }
+    const feetY = this.y + 30;
+    const heightAboveRoad = Math.max(0, groundTop - feetY);
+    const scaleFactor = Math.max(0.42, 1 - heightAboveRoad / 340);
+    const alphaFactor = Math.max(0.18, 0.78 - heightAboveRoad / 280);
+    this.groundShadow
+      .setVisible(true)
+      .setPosition(this.x - 2, groundTop + 1)
+      .setScale(scaleFactor, scaleFactor * 0.85)
+      .setAlpha(alphaFactor);
+  }
+
   update(time: number, delta: number, isRunning: boolean) {
     const dtSec = delta / 1000;
 
     this.overdriveRing.setPosition(this.x, this.y);
     this.shieldRing.setPosition(this.x, this.y);
     this.magnetRing.setPosition(this.x, this.y);
+    this.playerGlow?.setPosition(this.x, this.y);
+
+    if (this.muzzleFlash && this.muzzleFlashMs > 0) {
+      this.muzzleFlashMs = Math.max(0, this.muzzleFlashMs - delta);
+      if (this.muzzleFlashMs === 0) {
+        this.muzzleFlash.setVisible(false);
+      } else {
+        this.muzzleFlash.setPosition(this.x + 30, this.y - 2).setAlpha(this.muzzleFlashMs / 55);
+      }
+    }
 
     if (this.isDead) return;
 
@@ -580,6 +637,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     } else {
       this.spawnBulletAt(this.x + 28, this.y - 2, tint);
     }
+    if (this.muzzleFlash) {
+      this.muzzleFlashMs = 55;
+      this.muzzleFlash
+        .setPosition(this.x + 30, this.y - 2)
+        .setTint(tint)
+        .setAlpha(0.85)
+        .setVisible(true);
+    }
     soundEngine.playLaser();
   }
 
@@ -600,6 +665,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.shieldRing.setVisible(false);
     this.magnetRing.setVisible(false);
     this.overdriveRing.setVisible(false);
+    this.groundShadow?.setVisible(false);
+    this.playerGlow?.setVisible(false);
+    this.muzzleFlash?.setVisible(false);
     this.jetpackBarBg.setVisible(false);
     this.jetpackBarFill.setVisible(false);
     if (this.particles && this.particles.emitting) {
@@ -617,6 +685,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.squashX = 1;
     this.squashY = 1;
     this.afterimageTimer = 0;
+    this.muzzleFlashMs = 0;
     this.jumpHoldTimer = 0;
     this.jetpackFuelMs = this.getMaxJetpackFuelMs();
     this.jumpPressedTime = -9999;
@@ -636,6 +705,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.shieldRing.setVisible(false);
     this.magnetRing.setVisible(false);
     this.overdriveRing.setVisible(false);
+    this.groundShadow?.setVisible(true);
+    this.playerGlow?.setVisible(true);
+    this.muzzleFlash?.setVisible(false);
     this.jetpackBarBg.setVisible(false);
     this.jetpackBarFill.setVisible(false);
     this.applySkinVisuals();

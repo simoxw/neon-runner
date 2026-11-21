@@ -59,4 +59,11 @@ describe('Level Design & Physics Reachability Invariants', () => {
       expect(maxJumpReach).toBeGreaterThan(152 + 80);
     }
   });
+
+  it('guarantees double-chasm bridge spacing leaves a wide solid landing island between chasms', () => {
+    const centerToCenterSpacing = 360;
+    const maxChasmWidth = 138;
+    const minSolidIslandWidth = centerToCenterSpacing - maxChasmWidth;
+    expect(minSolidIslandWidth).toBeGreaterThanOrEqual(220);
+  });
 });

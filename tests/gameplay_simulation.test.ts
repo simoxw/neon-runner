@@ -8,8 +8,12 @@ import {
   computeSectorIndex,
   computeSpeedForScore,
   getComboMultiplier,
+  getEligiblePatterns,
+  isChasmPattern,
   isOverRoadGap,
   LaserState,
+  PatternId,
+  pickNextPattern,
   resetCombo,
   resolveDroneBulletHit,
   shouldCollideWithGround,
@@ -158,5 +162,56 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
 
     // Hyper Overdrive hovers safely across chasms while above groundTop - 16
     expect(shouldCollideWithGround(270, groundTop - 30, groundTop, gaps, true)).toBe(true);
+  });
+
+  it('unlocks advanced obstacle patterns progressively across distance thresholds', () => {
+    const startPool = getEligiblePatterns(0);
+    expect(startPool).not.toContain('road_chasm');
+    expect(startPool).not.toContain('double_chasm_bridge');
+    expect(startPool).not.toContain('laser_bypass');
+
+    const at35m = getEligiblePatterns(35);
+    expect(at35m).toContain('road_chasm');
+    expect(at35m).not.toContain('double_chasm_bridge');
+
+    const at120m = getEligiblePatterns(120);
+    expect(at120m).toContain('double_chasm_bridge');
+    expect(at120m).not.toContain('laser_bypass');
+
+    const atSector2 = getEligiblePatterns(GAME_CONFIG.SECTOR_INTERVAL_METERS);
+    expect(atSector2).toContain('laser_bypass');
+    expect(atSector2).toContain('laser_drone_cross');
+  });
+
+  it('prevents pattern repetition within the last 3 draws and never starts chains from chasms', () => {
+    let seed = 1337;
+    const deterministicRng = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+
+    let recent: PatternId[] = [];
+    let chainCount = 0;
+    const observed = new Set<PatternId>();
+
+    for (let i = 0; i < 200; i++) {
+      const scoreMeters = 400 + i * 2;
+      const pick = pickNextPattern(scoreMeters, recent, deterministicRng);
+
+      expect(recent).not.toContain(pick.patternId);
+      if (isChasmPattern(pick.patternId)) {
+        expect(pick.startsChain).toBe(false);
+      }
+      if (pick.startsChain) {
+        chainCount += 1;
+      }
+
+      observed.add(pick.patternId);
+      recent = pick.nextRecent;
+      expect(recent.length).toBeLessThanOrEqual(3);
+    }
+
+    expect(observed.size).toBe(14);
+    expect(chainCount).toBeGreaterThan(20);
   });
 });

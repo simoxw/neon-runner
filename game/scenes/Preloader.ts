@@ -242,25 +242,25 @@ export class Preloader extends Phaser.Scene {
 
   private createGroundTexture() {
     if (this.textures.exists('ground')) return;
-    const canvas = this.textures.createCanvas('ground', 512, 96);
+    const canvas = this.textures.createCanvas('ground', 512, 110);
     if (!canvas) return;
     const ctx = canvas.context;
 
-    // 1. Deep dark sky-void backdrop beneath elevated viaduct arches
-    const voidGrad = ctx.createLinearGradient(0, 24, 0, 96);
+    // 1. Deep dark sky-void backdrop beneath elevated viaduct arches (y = 24..110)
+    const voidGrad = ctx.createLinearGradient(0, 26, 0, 110);
     voidGrad.addColorStop(0, '#050712');
     voidGrad.addColorStop(0.65, '#070a18');
     voidGrad.addColorStop(1, '#0b1026');
     ctx.fillStyle = voidGrad;
-    ctx.fillRect(0, 0, 512, 96);
+    ctx.fillRect(0, 24, 512, 86);
 
     // Subtle city underglow rising between viaduct piers
     for (let x = 0; x < 512; x += 256) {
-      const archGlow = ctx.createRadialGradient(x + 128, 96, 12, x + 128, 96, 108);
-      archGlow.addColorStop(0, 'rgba(0, 243, 255, 0.14)');
+      const archGlow = ctx.createRadialGradient(x + 128, 110, 12, x + 128, 110, 112);
+      archGlow.addColorStop(0, 'rgba(0, 243, 255, 0.16)');
       archGlow.addColorStop(1, 'rgba(0, 243, 255, 0)');
       ctx.fillStyle = archGlow;
-      ctx.fillRect(x, 36, 256, 60);
+      ctx.fillRect(x, 44, 256, 66);
     }
 
     // 2. Sculpted 256px viaduct arch bays & diagonal steel V-struts
@@ -269,159 +269,205 @@ export class Preloader extends Phaser.Scene {
       const spanEnd = bayX + 222;
       const spanMid = bayX + 128;
 
-      // Arched steel soffit silhouette under the deck
       ctx.fillStyle = '#11162e';
       ctx.beginPath();
-      ctx.moveTo(spanStart, 96);
-      ctx.lineTo(spanStart, 46);
-      ctx.quadraticCurveTo(spanMid, 24, spanEnd, 46);
-      ctx.lineTo(spanEnd, 96);
-      ctx.lineTo(spanEnd - 14, 96);
-      ctx.lineTo(spanEnd - 14, 54);
-      ctx.quadraticCurveTo(spanMid, 33, spanStart + 14, 54);
-      ctx.lineTo(spanStart + 14, 96);
+      ctx.moveTo(spanStart, 110);
+      ctx.lineTo(spanStart, 56);
+      ctx.quadraticCurveTo(spanMid, 34, spanEnd, 56);
+      ctx.lineTo(spanEnd, 110);
+      ctx.lineTo(spanEnd - 14, 110);
+      ctx.lineTo(spanEnd - 14, 64);
+      ctx.quadraticCurveTo(spanMid, 43, spanStart + 14, 64);
+      ctx.lineTo(spanStart + 14, 110);
       ctx.closePath();
       ctx.fill();
 
-      // Clean diagonal support V-trusses anchored to central girder
-      ctx.strokeStyle = '#1c2345';
+      ctx.strokeStyle = '#1d254a';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(spanStart + 18, 86);
-      ctx.lineTo(spanMid - 34, 42);
-      ctx.lineTo(spanMid, 82);
-      ctx.lineTo(spanMid + 34, 42);
-      ctx.lineTo(spanEnd - 18, 86);
+      ctx.moveTo(spanStart + 18, 100);
+      ctx.lineTo(spanMid - 34, 54);
+      ctx.lineTo(spanMid, 96);
+      ctx.lineTo(spanMid + 34, 54);
+      ctx.lineTo(spanEnd - 18, 100);
       ctx.stroke();
 
-      // Crisp inner highlight along truss edges
-      ctx.strokeStyle = 'rgba(0, 243, 255, 0.16)';
+      ctx.strokeStyle = 'rgba(0, 243, 255, 0.18)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(spanStart + 18, 84);
-      ctx.lineTo(spanMid - 34, 40);
-      ctx.moveTo(spanMid + 34, 40);
-      ctx.lineTo(spanEnd - 18, 84);
+      ctx.moveTo(spanStart + 18, 98);
+      ctx.lineTo(spanMid - 34, 52);
+      ctx.moveTo(spanMid + 34, 52);
+      ctx.lineTo(spanEnd - 18, 98);
       ctx.stroke();
     }
 
-    // 3. Single clean horizontal energy conduit bus beneath the deck lip
+    // 3. Recessed horizontal energy conduit beneath front deck fascia
     ctx.fillStyle = '#0d1124';
-    ctx.fillRect(0, 28, 512, 10);
-    ctx.fillStyle = 'rgba(0, 243, 255, 0.22)';
-    ctx.fillRect(0, 31, 512, 4);
+    ctx.fillRect(0, 40, 512, 10);
+    ctx.fillStyle = 'rgba(0, 243, 255, 0.24)';
+    ctx.fillRect(0, 43, 512, 4);
     ctx.fillStyle = '#00f3ff';
-    ctx.fillRect(0, 32.5, 512, 1.5);
+    ctx.fillRect(0, 44.5, 512, 1.5);
 
-    // Metallic pipe clamps every 128px
     for (let x = 122; x < 512; x += 256) {
       ctx.fillStyle = '#242c54';
-      ctx.fillRect(x, 26, 12, 14);
+      ctx.fillRect(x, 38, 12, 14);
       ctx.fillStyle = '#ffc857';
-      ctx.fillRect(x + 4, 31, 4, 4);
+      ctx.fillRect(x + 4, 43, 4, 4);
     }
 
-    // 4. Heavy structural viaduct piers every 256px (split across tile seam at 0 / 256)
+    // 4. Heavy 3D viaduct piers every 256px
     const drawPierColumn = (px: number, w: number) => {
-      // Main concrete/steel shaft
-      const pierGrad = ctx.createLinearGradient(px, 24, px + w, 24);
-      pierGrad.addColorStop(0, '#232b52');
-      pierGrad.addColorStop(0.3, '#171d3a');
-      pierGrad.addColorStop(1, '#0e1226');
+      const pierGrad = ctx.createLinearGradient(px, 36, px + w, 36);
+      pierGrad.addColorStop(0, '#27305c');
+      pierGrad.addColorStop(0.35, '#171d3a');
+      pierGrad.addColorStop(1, '#0c1022');
       ctx.fillStyle = pierGrad;
-      ctx.fillRect(px, 24, w, 72);
+      ctx.fillRect(px, 36, w, 74);
 
-      // Left edge rim highlight & right shadow border
-      ctx.fillStyle = '#333f73';
-      ctx.fillRect(px, 24, 2, 72);
+      ctx.fillStyle = '#38467d';
+      ctx.fillRect(px, 36, 2, 74);
       ctx.fillStyle = '#070914';
-      ctx.fillRect(px + w - 2, 24, 2, 72);
+      ctx.fillRect(px + w - 2, 36, 2, 74);
 
-      // Clean vertical cyan core light strip centered on pier
       const cx = Math.floor(px + w / 2 - 2);
-      ctx.fillStyle = 'rgba(0, 243, 255, 0.25)';
-      ctx.fillRect(cx - 2, 34, 8, 52);
+      ctx.fillStyle = 'rgba(0, 243, 255, 0.26)';
+      ctx.fillRect(cx - 2, 46, 8, 54);
       ctx.fillStyle = '#00f3ff';
-      ctx.fillRect(cx, 36, 4, 48);
+      ctx.fillRect(cx, 48, 4, 50);
 
-      // Top pier capital bracket & amber safety marker
       ctx.fillStyle = '#28315c';
-      ctx.fillRect(px - 3, 24, w + 6, 7);
+      ctx.fillRect(px - 3, 36, w + 6, 7);
       ctx.fillStyle = '#ffc857';
-      ctx.fillRect(cx - 3, 26, 10, 3);
+      ctx.fillRect(cx - 3, 38, 10, 3);
     };
 
     drawPierColumn(0, 34);
     drawPierColumn(256, 34);
 
-    // 5. Overhanging upper highway deck (y = 0..24) — razor-sharp playable surface
-    // Drop shadow cast beneath overhanging road deck
-    const overhangShadow = ctx.createLinearGradient(0, 22, 0, 30);
-    overhangShadow.addColorStop(0, 'rgba(0, 0, 0, 0.72)');
+    // 5. Overhanging 2.5D Front Deck Fascia (y = 22..38) + drop shadow
+    const overhangShadow = ctx.createLinearGradient(0, 36, 0, 44);
+    overhangShadow.addColorStop(0, 'rgba(0, 0, 0, 0.78)');
     overhangShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = overhangShadow;
-    ctx.fillRect(0, 22, 512, 8);
+    ctx.fillRect(0, 36, 512, 8);
 
-    // Roadway steel fascia & bevel
-    const deckGrad = ctx.createLinearGradient(0, 3, 0, 23);
-    deckGrad.addColorStop(0, '#1e264a');
-    deckGrad.addColorStop(0.55, '#141933');
-    deckGrad.addColorStop(1, '#0e1226');
-    ctx.fillStyle = deckGrad;
-    ctx.fillRect(0, 3, 512, 19);
+    const fasciaGrad = ctx.createLinearGradient(0, 22, 0, 37);
+    fasciaGrad.addColorStop(0, '#222b54');
+    fasciaGrad.addColorStop(0.6, '#141933');
+    fasciaGrad.addColorStop(1, '#0c1022');
+    ctx.fillStyle = fasciaGrad;
+    ctx.fillRect(0, 22, 512, 15);
 
-    // Clean lower steel flange rim
-    ctx.fillStyle = '#2b3666';
-    ctx.fillRect(0, 20, 512, 3);
-    ctx.fillStyle = '#070912';
-    ctx.fillRect(0, 23, 512, 1.5);
+    ctx.fillStyle = '#2e3a6e';
+    ctx.fillRect(0, 35, 512, 2.5);
+    ctx.fillStyle = '#060810';
+    ctx.fillRect(0, 37.5, 512, 1.5);
 
-    // Crisp spaced speed chevrons & amber deck reflectors (every 64px, zero clutter)
+    // Subtle fascia deck ribs & amber reflector ticks
     for (let x = 0; x < 512; x += 64) {
-      // Subtle angled metallic deck seam
       ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-      ctx.beginPath();
-      ctx.moveTo(x + 14, 5);
-      ctx.lineTo(x + 28, 5);
-      ctx.lineTo(x + 20, 19);
-      ctx.lineTo(x + 6, 19);
-      ctx.closePath();
-      ctx.fill();
-
-      // Clean cyan lane dash
-      ctx.fillStyle = 'rgba(0, 243, 255, 0.55)';
-      ctx.fillRect(x + 38, 10, 14, 3);
+      ctx.fillRect(x + 14, 24, 10, 10);
+      ctx.fillStyle = 'rgba(0, 243, 255, 0.45)';
+      ctx.fillRect(x + 40, 27, 12, 2.5);
     }
 
-    // Razor-sharp top Mag-Rail (white-hot core + cyan glow)
-    ctx.fillStyle = 'rgba(0, 243, 255, 0.32)';
-    ctx.fillRect(0, 3, 512, 4);
+    // 6. 2.5D Perspective Running Lane Surface (y = 0..22, runner center line at y = 14)
+    const roadGrad = ctx.createLinearGradient(0, 0, 0, 22);
+    roadGrad.addColorStop(0, '#0a0d1f');
+    roadGrad.addColorStop(0.45, '#131936');
+    roadGrad.addColorStop(1, '#1c244a');
+    ctx.fillStyle = roadGrad;
+    ctx.fillRect(0, 0, 512, 22);
+
+    // Back curb rail along horizon edge
+    ctx.fillStyle = '#283363';
+    ctx.fillRect(0, 0, 512, 2.5);
+    ctx.fillStyle = 'rgba(0, 243, 255, 0.42)';
+    ctx.fillRect(0, 2, 512, 1.2);
+
+    // Foreshortened perspective seam lines & center glowing lane dashes
+    for (let x = 0; x < 512; x += 64) {
+      ctx.strokeStyle = 'rgba(0, 243, 255, 0.14)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x + 20, 3);
+      ctx.lineTo(x + 8, 20);
+      ctx.stroke();
+
+      // Center perspective running dashes (along y = 11)
+      ctx.fillStyle = 'rgba(0, 243, 255, 0.34)';
+      ctx.fillRect(x + 28, 10.5, 20, 2);
+    }
+
+    // Specular pool reflections on wet cyber asphalt beneath back streetlights (at x = 64 & 320)
+    for (const lx of [64, 320]) {
+      const pool = ctx.createRadialGradient(lx, 12, 2, lx, 12, 34);
+      pool.addColorStop(0, 'rgba(0, 243, 255, 0.24)');
+      pool.addColorStop(1, 'rgba(0, 243, 255, 0)');
+      ctx.fillStyle = pool;
+      ctx.fillRect(lx - 34, 2, 68, 18);
+    }
+
+    // Front glowing magnetic curb rail (brightest edge facing camera)
+    ctx.fillStyle = 'rgba(0, 243, 255, 0.35)';
+    ctx.fillRect(0, 18, 512, 4);
     ctx.fillStyle = '#00f3ff';
-    ctx.fillRect(0, 0, 512, 3.5);
+    ctx.fillRect(0, 20, 512, 3);
     ctx.fillStyle = '#d8ffff';
-    ctx.fillRect(0, 0, 512, 1.2);
+    ctx.fillRect(0, 20, 512, 1.2);
 
     canvas.refresh();
 
     if (!this.textures.exists('sky_platform')) {
-      const platCanvas = this.textures.createCanvas('sky_platform', 180, 22);
+      const platCanvas = this.textures.createCanvas('sky_platform', 180, 28);
       if (platCanvas) {
         const pctx = platCanvas.context;
-        pctx.fillStyle = '#111630';
-        pctx.fillRect(4, 4, 172, 12);
 
-        // Top neon landing rail
+        // 2.5D top perspective deck (trapezoid top plane)
+        const topGrad = pctx.createLinearGradient(0, 0, 0, 9);
+        topGrad.addColorStop(0, '#161e40');
+        topGrad.addColorStop(1, '#263469');
+        pctx.fillStyle = topGrad;
+        pctx.beginPath();
+        pctx.moveTo(8, 0);
+        pctx.lineTo(172, 0);
+        pctx.lineTo(180, 9);
+        pctx.lineTo(0, 9);
+        pctx.closePath();
+        pctx.fill();
+
+        // Holographic lane center strip on 2.5D top deck
+        pctx.fillStyle = 'rgba(0, 243, 255, 0.45)';
+        pctx.fillRect(16, 4, 148, 2);
+
+        // Bright beveled front landing rail
         pctx.fillStyle = '#00f3ff';
-        pctx.fillRect(0, 0, 180, 4);
-        pctx.fillStyle = 'rgba(0, 243, 255, 0.35)';
-        pctx.fillRect(4, 4, 172, 3);
+        pctx.fillRect(0, 8, 180, 3);
+        pctx.fillStyle = '#d8ffff';
+        pctx.fillRect(2, 8, 176, 1);
 
-        // Underside hover thruster emitters
-        pctx.fillStyle = '#ff2a6d';
-        pctx.fillRect(22, 16, 26, 4);
-        pctx.fillRect(132, 16, 26, 4);
-        pctx.fillStyle = '#ffc857';
-        pctx.fillRect(80, 16, 20, 3);
+        // Heavy 2.5D armored front chassis
+        const bodyGrad = pctx.createLinearGradient(0, 11, 0, 21);
+        bodyGrad.addColorStop(0, '#182042');
+        bodyGrad.addColorStop(1, '#0c1024');
+        pctx.fillStyle = bodyGrad;
+        pctx.fillRect(3, 11, 174, 10);
+        pctx.fillStyle = '#2d396e';
+        pctx.fillRect(14, 14, 24, 3);
+        pctx.fillRect(78, 14, 24, 3);
+        pctx.fillRect(142, 14, 24, 3);
+
+        // Underside hover thruster cones & amber core glow
+        for (const tx of [22, 80, 132]) {
+          const w = tx === 80 ? 20 : 26;
+          const tGrad = pctx.createLinearGradient(0, 21, 0, 28);
+          tGrad.addColorStop(0, tx === 80 ? '#ffc857' : '#ff2a6d');
+          tGrad.addColorStop(1, 'rgba(255, 42, 109, 0)');
+          pctx.fillStyle = tGrad;
+          pctx.fillRect(tx, 21, w, 7);
+        }
 
         platCanvas.refresh();
       }
@@ -437,59 +483,87 @@ export class Preloader extends Phaser.Scene {
   }) {
     const { bodyY, leftLegAngle, rightLegAngle, armAngle, glideMode } = opts;
 
-    // Thruster pack
-    ctx.fillStyle = '#1f2342';
-    ctx.fillRect(10, bodyY + 18, 8, 16);
+    // 2.5D Jetpack thruster housing with bevel & nozzle
+    ctx.fillStyle = '#151933';
+    ctx.fillRect(9, bodyY + 17, 10, 18);
+    ctx.fillStyle = '#2b3563';
+    ctx.fillRect(10, bodyY + 17, 3, 16);
     ctx.fillStyle = glideMode ? '#00f3ff' : '#ff2a6d';
-    ctx.fillRect(8, bodyY + 22, 4, 8);
+    ctx.fillRect(7, bodyY + 21, 4, 10);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(8, bodyY + 23, 2, 5);
 
-    // Back leg
+    // Back leg (darker slate-cyan for 2.5D depth separation)
     ctx.save();
     ctx.translate(22, bodyY + 34);
     ctx.rotate(leftLegAngle);
-    ctx.fillStyle = '#0e8ea8';
-    ctx.fillRect(-3, 0, 7, 18);
-    ctx.fillStyle = '#00f3ff';
-    ctx.fillRect(-3, 14, 9, 4);
+    ctx.fillStyle = '#096a82';
+    ctx.fillRect(-3.5, 0, 7.5, 18);
+    ctx.fillStyle = '#113c57';
+    ctx.fillRect(-3.5, 0, 3, 14);
+    ctx.fillStyle = '#00c8db';
+    ctx.fillRect(-3.5, 14, 10, 4.5);
     ctx.restore();
 
-    // Torso
-    ctx.fillStyle = '#181c36';
-    ctx.fillRect(16, bodyY + 14, 16, 22);
+    // Sculpted 2.5D armored torso with sternum arc reactor
+    const torsoGrad = ctx.createLinearGradient(15, bodyY + 14, 33, bodyY + 36);
+    torsoGrad.addColorStop(0, '#272f59');
+    torsoGrad.addColorStop(1, '#12162e');
+    ctx.fillStyle = torsoGrad;
+    ctx.fillRect(15, bodyY + 14, 17, 22);
     ctx.fillStyle = '#00f3ff';
-    ctx.fillRect(20, bodyY + 16, 4, 18);
-    ctx.fillRect(26, bodyY + 18, 3, 14);
+    ctx.fillRect(19, bodyY + 16, 3.5, 18);
+    ctx.fillStyle = '#d8ffff';
+    ctx.fillRect(25, bodyY + 18, 4.5, 6);
+    ctx.fillStyle = '#ff2a6d';
+    ctx.fillRect(26, bodyY + 27, 3, 5);
 
-    // Front leg
+    // Front leg (bright high-contrast cyan armor + cyber boot highlight)
     ctx.save();
     ctx.translate(26, bodyY + 34);
     ctx.rotate(rightLegAngle);
-    ctx.fillStyle = '#00f3ff';
-    ctx.fillRect(-3, 0, 7, 18);
+    ctx.fillStyle = '#00d8f0';
+    ctx.fillRect(-3.5, 0, 7.5, 18);
+    ctx.fillStyle = '#8cf8ff';
+    ctx.fillRect(-3.5, 0, 2.5, 14);
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(-3, 14, 10, 4);
+    ctx.fillRect(-3.5, 14, 11, 4.5);
+    ctx.fillStyle = '#00f3ff';
+    ctx.fillRect(4.5, 15, 3, 3);
     ctx.restore();
 
-    // Helmet & Visor
-    ctx.fillStyle = '#1d2240';
+    // Sculpted 2.5D Helmet with rim highlight & specular visor
+    const helmGrad = ctx.createRadialGradient(23, bodyY + 5, 2, 25, bodyY + 8, 12);
+    helmGrad.addColorStop(0, '#323c70');
+    helmGrad.addColorStop(1, '#151933');
+    ctx.fillStyle = helmGrad;
     ctx.beginPath();
-    ctx.arc(25, bodyY + 8, 10, 0, Math.PI * 2);
+    ctx.arc(25, bodyY + 8, 10.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#00f3ff';
     ctx.lineWidth = 2;
     ctx.stroke();
 
+    // Visor + glowing slit
     ctx.fillStyle = '#ff2a6d';
-    ctx.fillRect(26, bodyY + 4, 10, 6);
+    ctx.fillRect(25, bodyY + 4, 11, 6);
+    ctx.fillStyle = '#ffc857';
+    ctx.fillRect(28, bodyY + 5, 7, 2.5);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(31, bodyY + 5, 3, 1.5);
 
-    // Arm / Blaster
+    // Forearm & Pulse Blaster with glowing chamber
     ctx.save();
     ctx.translate(22, bodyY + 20);
     ctx.rotate(armAngle);
+    ctx.fillStyle = '#1b2447';
+    ctx.fillRect(0, -3, 12, 6);
     ctx.fillStyle = '#00f3ff';
-    ctx.fillRect(0, -2, 13, 5);
+    ctx.fillRect(1, -2, 12, 3.5);
     ctx.fillStyle = '#ffc857';
-    ctx.fillRect(11, -3, 7, 6);
+    ctx.fillRect(11, -3.5, 8, 6.5);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(16, -2, 3, 3.5);
     ctx.restore();
   }
 
@@ -534,14 +608,16 @@ export class Preloader extends Phaser.Scene {
           armAngle: 0.05,
           glideMode: true,
         });
-        // Glide wing / thruster jet
+        // 2.5D plasma aero-wing & jet thrust flare
         ctx.fillStyle = 'rgba(0, 243, 255, 0.85)';
         ctx.beginPath();
         ctx.moveTo(8, 22);
-        ctx.lineTo(-2, 16);
-        ctx.lineTo(14, 18);
+        ctx.lineTo(-2, 14);
+        ctx.lineTo(14, 17);
         ctx.closePath();
         ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(2, 16, 7, 2);
         canvas.refresh();
       }
     }
@@ -549,34 +625,80 @@ export class Preloader extends Phaser.Scene {
 
   private createBarrierTextures() {
     if (!this.textures.exists('barrier')) {
-      const canvas = this.textures.createCanvas('barrier', 40, 58);
+      const canvas = this.textures.createCanvas('barrier', 44, 62);
       if (canvas) {
         const ctx = canvas.context;
+        // 2.5D contact shadow & chamfered base pad
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+        ctx.beginPath();
+        ctx.ellipse(22, 57, 20, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#2d1026';
+        ctx.beginPath();
+        ctx.moveTo(4, 52);
+        ctx.lineTo(40, 52);
+        ctx.lineTo(43, 59);
+        ctx.lineTo(1, 59);
+        ctx.closePath();
+        ctx.fill();
+
+        // Outer armored pillar + 3D highlight edge
         ctx.fillStyle = '#24091b';
-        ctx.fillRect(10, 0, 20, 58);
+        ctx.fillRect(10, 4, 24, 50);
+        ctx.fillStyle = '#471535';
+        ctx.fillRect(10, 4, 4, 50);
+
+        // Glowing plasma core & bright inner filament
         ctx.fillStyle = '#ff2a6d';
-        ctx.fillRect(15, 4, 10, 50);
+        ctx.fillRect(15, 6, 14, 46);
+        ctx.fillStyle = '#ffd1e1';
+        ctx.fillRect(19, 8, 5, 42);
+
+        // Cross emitter fins
         ctx.fillStyle = '#ff77a8';
-        ctx.fillRect(4, 10, 32, 6);
-        ctx.fillRect(4, 28, 32, 6);
-        ctx.fillRect(2, 48, 36, 10);
+        ctx.fillRect(4, 12, 36, 6);
+        ctx.fillRect(4, 30, 36, 6);
+        ctx.fillStyle = '#ffc857';
+        ctx.fillRect(6, 51, 32, 4);
         canvas.refresh();
       }
     }
 
     if (!this.textures.exists('barrier_tall')) {
-      const canvas = this.textures.createCanvas('barrier_tall', 44, 94);
+      const canvas = this.textures.createCanvas('barrier_tall', 48, 98);
       if (canvas) {
         const ctx = canvas.context;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.beginPath();
+        ctx.ellipse(24, 93, 22, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#2d1026';
+        ctx.beginPath();
+        ctx.moveTo(4, 88);
+        ctx.lineTo(44, 88);
+        ctx.lineTo(47, 95);
+        ctx.lineTo(1, 95);
+        ctx.closePath();
+        ctx.fill();
+
         ctx.fillStyle = '#24091b';
-        ctx.fillRect(12, 0, 20, 94);
+        ctx.fillRect(12, 4, 24, 86);
+        ctx.fillStyle = '#471535';
+        ctx.fillRect(12, 4, 4, 86);
+
         ctx.fillStyle = '#ff2a6d';
-        ctx.fillRect(17, 4, 10, 86);
+        ctx.fillRect(17, 6, 14, 82);
+        ctx.fillStyle = '#ffd1e1';
+        ctx.fillRect(21, 8, 5, 78);
+
         ctx.fillStyle = '#ff77a8';
-        for (let y = 10; y <= 70; y += 20) {
-          ctx.fillRect(4, y, 36, 6);
+        for (let y = 12; y <= 72; y += 20) {
+          ctx.fillRect(5, y, 38, 6);
         }
-        ctx.fillRect(2, 84, 40, 10);
+        ctx.fillStyle = '#ffc857';
+        ctx.fillRect(6, 87, 36, 4);
         canvas.refresh();
       }
     }
@@ -586,68 +708,89 @@ export class Preloader extends Phaser.Scene {
     [0, 1].forEach((frame) => {
       const key = `drone_${frame}`;
       if (this.textures.exists(key)) return;
-      const canvas = this.textures.createCanvas(key, 48, 40);
+      const canvas = this.textures.createCanvas(key, 50, 42);
       if (!canvas) return;
       const ctx = canvas.context;
 
-      // Outer chassis
-      ctx.fillStyle = '#1b1d36';
+      // 2.5D faceted fuselage gradient
+      const hullGrad = ctx.createLinearGradient(10, 8, 42, 34);
+      hullGrad.addColorStop(0, '#2e335c');
+      hullGrad.addColorStop(0.55, '#1b1d36');
+      hullGrad.addColorStop(1, '#0e1022');
+      ctx.fillStyle = hullGrad;
       ctx.beginPath();
-      ctx.moveTo(8, 20);
+      ctx.moveTo(8, 21);
       ctx.lineTo(20, 8);
-      ctx.lineTo(36, 8);
-      ctx.lineTo(44, 20);
-      ctx.lineTo(36, 32);
-      ctx.lineTo(20, 32);
+      ctx.lineTo(38, 8);
+      ctx.lineTo(46, 21);
+      ctx.lineTo(38, 34);
+      ctx.lineTo(20, 34);
       ctx.closePath();
       ctx.fill();
+
       ctx.strokeStyle = '#ff8a00';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Pulsing core eye
+      // Top rim highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillRect(20, 10, 16, 2);
+
+      // Pulsing scanner optic with white specular glint
       ctx.fillStyle = frame === 0 ? '#ff2a6d' : '#ffc857';
       ctx.beginPath();
-      ctx.arc(24, 20, frame === 0 ? 7 : 5, 0, Math.PI * 2);
+      ctx.arc(24, 21, frame === 0 ? 7.5 : 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(22, 19, 2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Thruster fins
+      // Twin hover turbine fins
       ctx.fillStyle = '#00f3ff';
-      ctx.fillRect(18, frame === 0 ? 3 : 4, 14, 3);
-      ctx.fillRect(18, frame === 0 ? 34 : 33, 14, 3);
+      ctx.fillRect(18, frame === 0 ? 3 : 4, 15, 3);
+      ctx.fillRect(18, frame === 0 ? 36 : 35, 15, 3);
       canvas.refresh();
     });
 
     [0, 1].forEach((frame) => {
       const key = `drone_armored_${frame}`;
       if (this.textures.exists(key)) return;
-      const canvas = this.textures.createCanvas(key, 54, 46);
+      const canvas = this.textures.createCanvas(key, 56, 48);
       if (!canvas) return;
       const ctx = canvas.context;
 
-      // Reinforced outer armor shell
-      ctx.fillStyle = '#191335';
+      const shellGrad = ctx.createLinearGradient(8, 8, 48, 40);
+      shellGrad.addColorStop(0, '#2c225c');
+      shellGrad.addColorStop(0.6, '#191335');
+      shellGrad.addColorStop(1, '#0c091e');
+      ctx.fillStyle = shellGrad;
       ctx.beginPath();
-      ctx.moveTo(6, 23);
+      ctx.moveTo(6, 24);
       ctx.lineTo(18, 7);
-      ctx.lineTo(39, 7);
-      ctx.lineTo(49, 23);
-      ctx.lineTo(39, 39);
-      ctx.lineTo(18, 39);
+      ctx.lineTo(41, 7);
+      ctx.lineTo(51, 24);
+      ctx.lineTo(41, 41);
+      ctx.lineTo(18, 41);
       ctx.closePath();
       ctx.fill();
+
       ctx.strokeStyle = '#00f3ff';
       ctx.lineWidth = 3;
       ctx.stroke();
 
-      // Golden armor plate stripe & pulsing core
+      // Angled gold armor plates
       ctx.fillStyle = '#ffc857';
-      ctx.fillRect(18, 11, 18, 4);
-      ctx.fillRect(18, 31, 18, 4);
+      ctx.fillRect(18, 11, 20, 4.5);
+      ctx.fillRect(18, 32.5, 20, 4.5);
 
       ctx.fillStyle = frame === 0 ? '#00f3ff' : '#ff2a6d';
       ctx.beginPath();
-      ctx.arc(27, 23, frame === 0 ? 7 : 5, 0, Math.PI * 2);
+      ctx.arc(27, 24, frame === 0 ? 7.5 : 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(25, 22, 2.2, 0, Math.PI * 2);
       ctx.fill();
       canvas.refresh();
     });
@@ -658,18 +801,30 @@ export class Preloader extends Phaser.Scene {
     widths.forEach((rx, idx) => {
       const key = `coin_${idx}`;
       if (this.textures.exists(key)) return;
-      const canvas = this.textures.createCanvas(key, 32, 32);
+      const canvas = this.textures.createCanvas(key, 34, 34);
       if (!canvas) return;
       const ctx = canvas.context;
 
-      ctx.fillStyle = '#00ff9d';
+      // 2.5D extruded metallic depth edge
+      ctx.fillStyle = '#046e46';
       ctx.beginPath();
-      ctx.ellipse(16, 16, rx, 12, 0, 0, Math.PI * 2);
+      ctx.ellipse(18.5, 17, rx, 12.5, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      // Main neon emerald face
+      const faceGrad = ctx.createLinearGradient(17 - rx, 5, 17 + rx, 29);
+      faceGrad.addColorStop(0, '#80ffce');
+      faceGrad.addColorStop(0.5, '#00ff9d');
+      faceGrad.addColorStop(1, '#00b36e');
+      ctx.fillStyle = faceGrad;
+      ctx.beginPath();
+      ctx.ellipse(16.5, 17, rx, 12.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bright specular core slit
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.ellipse(16, 16, Math.max(2, rx * 0.45), 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(16.5, 17, Math.max(2, rx * 0.42), 6, 0, 0, Math.PI * 2);
       ctx.fill();
 
       canvas.refresh();
@@ -678,53 +833,62 @@ export class Preloader extends Phaser.Scene {
 
   private createPowerupTextures() {
     if (!this.textures.exists('powerup_shield')) {
-      const canvas = this.textures.createCanvas('powerup_shield', 38, 38);
+      const canvas = this.textures.createCanvas('powerup_shield', 40, 40);
       if (canvas) {
         const ctx = canvas.context;
-        ctx.fillStyle = 'rgba(0, 243, 255, 0.22)';
-        ctx.beginPath();
-        ctx.arc(19, 19, 17, 0, Math.PI * 2);
-        ctx.fill();
+        const glow = ctx.createRadialGradient(20, 20, 4, 20, 20, 19);
+        glow.addColorStop(0, 'rgba(0, 243, 255, 0.36)');
+        glow.addColorStop(1, 'rgba(0, 243, 255, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, 40, 40);
+
         ctx.strokeStyle = '#00f3ff';
         ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(20, 20, 16, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Inner shield emblem
         ctx.fillStyle = '#00f3ff';
         ctx.beginPath();
-        ctx.moveTo(19, 8);
-        ctx.lineTo(28, 12);
-        ctx.lineTo(26, 23);
-        ctx.lineTo(19, 30);
-        ctx.lineTo(12, 23);
-        ctx.lineTo(10, 12);
+        ctx.moveTo(20, 9);
+        ctx.lineTo(29, 13);
+        ctx.lineTo(27, 24);
+        ctx.lineTo(20, 31);
+        ctx.lineTo(13, 24);
+        ctx.lineTo(11, 13);
         ctx.closePath();
         ctx.fill();
+
+        ctx.fillStyle = '#d8ffff';
+        ctx.fillRect(16, 13, 4, 11);
         canvas.refresh();
       }
     }
 
     if (!this.textures.exists('powerup_magnet')) {
-      const canvas = this.textures.createCanvas('powerup_magnet', 38, 38);
+      const canvas = this.textures.createCanvas('powerup_magnet', 40, 40);
       if (canvas) {
         const ctx = canvas.context;
-        ctx.fillStyle = 'rgba(255, 200, 87, 0.22)';
-        ctx.beginPath();
-        ctx.arc(19, 19, 17, 0, Math.PI * 2);
-        ctx.fill();
+        const glow = ctx.createRadialGradient(20, 20, 4, 20, 20, 19);
+        glow.addColorStop(0, 'rgba(255, 200, 87, 0.36)');
+        glow.addColorStop(1, 'rgba(255, 200, 87, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, 40, 40);
+
         ctx.strokeStyle = '#ffc857';
         ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(20, 20, 16, 0, Math.PI * 2);
         ctx.stroke();
 
-        // U-Magnet
         ctx.strokeStyle = '#ff2a6d';
         ctx.lineWidth = 5;
         ctx.beginPath();
-        ctx.arc(19, 18, 8, 0, Math.PI, false);
+        ctx.arc(20, 19, 8, 0, Math.PI, false);
         ctx.stroke();
         ctx.fillStyle = '#00f3ff';
-        ctx.fillRect(9, 10, 5, 8);
-        ctx.fillRect(24, 10, 5, 8);
+        ctx.fillRect(10, 11, 5, 8);
+        ctx.fillRect(25, 11, 5, 8);
         canvas.refresh();
       }
     }
@@ -734,39 +898,50 @@ export class Preloader extends Phaser.Scene {
     [0, 1].forEach((frame) => {
       const key = `missile_${frame}`;
       if (this.textures.exists(key)) return;
-      const canvas = this.textures.createCanvas(key, 56, 24);
+      const canvas = this.textures.createCanvas(key, 58, 26);
       if (!canvas) return;
       const ctx = canvas.context;
 
-      // Exhaust flame on right
-      const flameLen = frame === 0 ? 16 : 11;
-      ctx.fillStyle = '#ffc857';
+      const flameLen = frame === 0 ? 17 : 12;
+      ctx.fillStyle = '#ff8a00';
       ctx.beginPath();
-      ctx.moveTo(40, 8);
-      ctx.lineTo(40 + flameLen, 12);
-      ctx.lineTo(40, 16);
+      ctx.moveTo(41, 8);
+      ctx.lineTo(41 + flameLen, 13);
+      ctx.lineTo(41, 18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#fff380';
+      ctx.beginPath();
+      ctx.moveTo(41, 10);
+      ctx.lineTo(41 + flameLen * 0.65, 13);
+      ctx.lineTo(41, 16);
       ctx.closePath();
       ctx.fill();
 
-      // Missile body pointing left
-      ctx.fillStyle = '#1e223d';
-      ctx.fillRect(14, 6, 26, 12);
+      // Cylindrical shaded fuselage
+      const bodyGrad = ctx.createLinearGradient(14, 7, 14, 19);
+      bodyGrad.addColorStop(0, '#3a4270');
+      bodyGrad.addColorStop(0.5, '#1e223d');
+      bodyGrad.addColorStop(1, '#0e1022');
+      ctx.fillStyle = bodyGrad;
+      ctx.fillRect(15, 7, 26, 12);
 
-      // Red nose cone
+      // Crimson warhead cone
       ctx.fillStyle = '#ff2a6d';
       ctx.beginPath();
-      ctx.moveTo(2, 12);
-      ctx.lineTo(15, 6);
-      ctx.lineTo(15, 18);
+      ctx.moveTo(2, 13);
+      ctx.lineTo(16, 7);
+      ctx.lineTo(16, 19);
       ctx.closePath();
       ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillRect(10, 9, 28, 2);
 
-      // Warning stripe & fins
       ctx.fillStyle = '#ffc857';
-      ctx.fillRect(22, 6, 5, 12);
+      ctx.fillRect(23, 7, 5, 12);
       ctx.fillStyle = '#ff2a6d';
-      ctx.fillRect(34, 2, 6, 5);
-      ctx.fillRect(34, 17, 6, 5);
+      ctx.fillRect(35, 3, 6, 5);
+      ctx.fillRect(35, 18, 6, 5);
 
       canvas.refresh();
     });
@@ -797,81 +972,91 @@ export class Preloader extends Phaser.Scene {
 
   private createLaserAndRingTextures() {
     if (!this.textures.exists('laser_gate_warn')) {
-      const canvas = this.textures.createCanvas('laser_gate_warn', 32, 132);
+      const canvas = this.textures.createCanvas('laser_gate_warn', 36, 134);
       if (canvas) {
         const ctx = canvas.context;
-        // Top & bottom emitter pods
-        ctx.fillStyle = '#20132d';
-        ctx.fillRect(4, 0, 24, 14);
-        ctx.fillRect(4, 118, 24, 14);
+        // 2.5D top & bottom armored emitter pods
+        ctx.fillStyle = '#251738';
+        ctx.fillRect(4, 0, 28, 15);
+        ctx.fillRect(4, 119, 28, 15);
+        ctx.fillStyle = '#3b2459';
+        ctx.fillRect(4, 0, 6, 15);
+        ctx.fillRect(4, 119, 6, 15);
         ctx.fillStyle = '#ffc857';
-        ctx.fillRect(8, 12, 16, 4);
-        ctx.fillRect(8, 116, 16, 4);
+        ctx.fillRect(8, 13, 20, 4);
+        ctx.fillRect(8, 117, 20, 4);
 
-        // Thin warning laser line
-        ctx.fillStyle = 'rgba(255, 42, 109, 0.55)';
-        ctx.fillRect(15, 16, 2, 100);
+        ctx.fillStyle = 'rgba(255, 42, 109, 0.58)';
+        ctx.fillRect(17, 17, 2, 100);
         canvas.refresh();
       }
     }
 
     if (!this.textures.exists('laser_gate_active')) {
-      const canvas = this.textures.createCanvas('laser_gate_active', 32, 132);
+      const canvas = this.textures.createCanvas('laser_gate_active', 36, 134);
       if (canvas) {
         const ctx = canvas.context;
-        ctx.fillStyle = '#2a0b24';
-        ctx.fillRect(4, 0, 24, 14);
-        ctx.fillRect(4, 118, 24, 14);
+        ctx.fillStyle = '#300c29';
+        ctx.fillRect(4, 0, 28, 15);
+        ctx.fillRect(4, 119, 28, 15);
         ctx.fillStyle = '#ff2a6d';
-        ctx.fillRect(8, 12, 16, 4);
-        ctx.fillRect(8, 116, 16, 4);
+        ctx.fillRect(8, 13, 20, 4);
+        ctx.fillRect(8, 117, 20, 4);
 
-        // Outer plasma glow + bright core
         ctx.fillStyle = 'rgba(255, 42, 109, 0.45)';
-        ctx.fillRect(8, 16, 16, 100);
+        ctx.fillRect(9, 17, 18, 100);
         ctx.fillStyle = '#ff2a6d';
-        ctx.fillRect(11, 16, 10, 100);
+        ctx.fillRect(13, 17, 10, 100);
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(14, 16, 4, 100);
+        ctx.fillRect(16, 17, 4, 100);
         canvas.refresh();
       }
     }
 
     if (!this.textures.exists('boost_ring')) {
-      const canvas = this.textures.createCanvas('boost_ring', 36, 62);
+      const canvas = this.textures.createCanvas('boost_ring', 40, 64);
       if (canvas) {
         const ctx = canvas.context;
-        ctx.strokeStyle = 'rgba(0, 243, 255, 0.32)';
-        ctx.lineWidth = 7;
+        // Outer soft halo
+        ctx.strokeStyle = 'rgba(0, 243, 255, 0.28)';
+        ctx.lineWidth = 8;
         ctx.beginPath();
-        ctx.ellipse(18, 31, 12, 24, 0, 0, Math.PI * 2);
+        ctx.ellipse(20, 32, 13, 25, 0, 0, Math.PI * 2);
         ctx.stroke();
 
-        ctx.strokeStyle = '#00ff9d';
-        ctx.lineWidth = 3;
+        // Back arc slightly dimmed for 2.5D torus perspective
+        ctx.strokeStyle = '#009966';
+        ctx.lineWidth = 3.5;
         ctx.beginPath();
-        ctx.ellipse(18, 31, 12, 24, 0, 0, Math.PI * 2);
+        ctx.ellipse(20, 32, 13, 25, 0, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.stroke();
+
+        // Bright front arc facing camera
+        ctx.strokeStyle = '#00ff9d';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(20, 32, 13, 25, 0, -Math.PI * 0.5, Math.PI * 0.5);
         ctx.stroke();
 
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.ellipse(18, 31, 8, 18, 0, 0, Math.PI * 2);
+        ctx.ellipse(20, 32, 9, 19, 0, -Math.PI * 0.45, Math.PI * 0.45);
         ctx.stroke();
         canvas.refresh();
       }
     }
 
     if (!this.textures.exists('wind_streak')) {
-      const canvas = this.textures.createCanvas('wind_streak', 48, 3);
+      const canvas = this.textures.createCanvas('wind_streak', 54, 3);
       if (canvas) {
         const ctx = canvas.context;
-        const grad = ctx.createLinearGradient(0, 0, 48, 0);
+        const grad = ctx.createLinearGradient(0, 0, 54, 0);
         grad.addColorStop(0, 'rgba(0, 243, 255, 0)');
-        grad.addColorStop(0.5, 'rgba(0, 243, 255, 0.55)');
+        grad.addColorStop(0.5, 'rgba(0, 243, 255, 0.62)');
         grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 48, 3);
+        ctx.fillRect(0, 0, 54, 3);
         canvas.refresh();
       }
     }
@@ -879,37 +1064,139 @@ export class Preloader extends Phaser.Scene {
 
   private createEnvironmentTextures() {
     if (!this.textures.exists('road_gap')) {
-      const canvas = this.textures.createCanvas('road_gap', 160, 96);
+      const canvas = this.textures.createCanvas('road_gap', 160, 110);
       if (canvas) {
         const ctx = canvas.context;
-        // Abyssal drop shaft cleanly cutting the viaduct deck
-        const dropGrad = ctx.createLinearGradient(0, 0, 0, 96);
+        // 1. Deep night sky & void opening where the 2.5D deck breaks
+        const dropGrad = ctx.createLinearGradient(0, 0, 0, 110);
         dropGrad.addColorStop(0, '#090a18');
         dropGrad.addColorStop(0.55, '#05060f');
         dropGrad.addColorStop(1, '#020207');
         ctx.fillStyle = dropGrad;
-        ctx.fillRect(0, 0, 160, 96);
+        ctx.fillRect(0, 0, 160, 110);
 
-        // Sheared viaduct end-pillars flanking the gap
+        // 2. 2.5D angled perspective sheared cut-off curbs on left & right sides (y = 0..24)
+        ctx.fillStyle = '#1d254a';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(14, 0);
+        ctx.lineTo(6, 22);
+        ctx.lineTo(0, 22);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(146, 0);
+        ctx.lineTo(160, 0);
+        ctx.lineTo(160, 22);
+        ctx.lineTo(154, 22);
+        ctx.closePath();
+        ctx.fill();
+
+        // Sheared steel end-pillars beneath deck fascia
         ctx.fillStyle = '#1c2345';
-        ctx.fillRect(0, 0, 10, 96);
-        ctx.fillRect(150, 0, 10, 96);
-        ctx.fillStyle = '#2c3769';
-        ctx.fillRect(8, 22, 3, 74);
-        ctx.fillRect(149, 22, 3, 74);
+        ctx.fillRect(0, 22, 10, 88);
+        ctx.fillRect(150, 22, 10, 88);
+        ctx.fillStyle = '#2e3a6e';
+        ctx.fillRect(8, 34, 3, 76);
+        ctx.fillRect(149, 34, 3, 76);
 
-        // High-contrast crimson/amber hazard edge caps at deck level
+        // High-contrast crimson/amber hazard edge caps slanted along 2.5D curb cut
         ctx.fillStyle = '#ff2a6d';
-        ctx.fillRect(0, 0, 13, 12);
-        ctx.fillRect(147, 0, 13, 12);
+        ctx.fillRect(0, 16, 13, 14);
+        ctx.fillRect(147, 16, 13, 14);
         ctx.fillStyle = '#ffc857';
-        ctx.fillRect(2, 3, 8, 4);
-        ctx.fillRect(150, 3, 8, 4);
+        ctx.fillRect(2, 19, 8, 4);
+        ctx.fillRect(150, 19, 8, 4);
 
-        // Faint downward laser-drop guide lines inside shaft walls
-        ctx.fillStyle = 'rgba(255, 42, 109, 0.22)';
-        ctx.fillRect(11, 0, 4, 96);
-        ctx.fillRect(145, 0, 4, 96);
+        // Downward hazard wall glow inside chasm shaft
+        ctx.fillStyle = 'rgba(255, 42, 109, 0.24)';
+        ctx.fillRect(11, 22, 4, 88);
+        ctx.fillRect(145, 22, 4, 88);
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('street_lamps')) {
+      const canvas = this.textures.createCanvas('street_lamps', 512, 92);
+      if (canvas) {
+        const ctx = canvas.context;
+        ctx.clearRect(0, 0, 512, 92);
+        for (const lx of [64, 320]) {
+          // Volumetric downward light cone onto the 2.5D road surface
+          const coneGrad = ctx.createLinearGradient(lx, 18, lx, 92);
+          coneGrad.addColorStop(0, 'rgba(0, 243, 255, 0.28)');
+          coneGrad.addColorStop(0.55, 'rgba(0, 243, 255, 0.08)');
+          coneGrad.addColorStop(1, 'rgba(0, 243, 255, 0)');
+          ctx.fillStyle = coneGrad;
+          ctx.beginPath();
+          ctx.moveTo(lx + 4, 18);
+          ctx.lineTo(lx + 18, 18);
+          ctx.lineTo(lx + 42, 92);
+          ctx.lineTo(lx - 24, 92);
+          ctx.closePath();
+          ctx.fill();
+
+          // Sleek curved cyber lamp mast anchored behind back curb
+          ctx.fillStyle = '#181e3b';
+          ctx.fillRect(lx - 2, 14, 4, 78);
+          ctx.fillRect(lx - 2, 12, 20, 4);
+          ctx.fillStyle = '#00f3ff';
+          ctx.fillRect(lx + 6, 16, 11, 2.5);
+        }
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('fg_girders')) {
+      const canvas = this.textures.createCanvas('fg_girders', 512, 56);
+      if (canvas) {
+        const ctx = canvas.context;
+        ctx.clearRect(0, 0, 512, 56);
+
+        // Dark foreground suspension cable dip along extreme bottom frame
+        ctx.strokeStyle = 'rgba(4, 5, 11, 0.85)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 32);
+        ctx.quadraticCurveTo(256, 52, 512, 32);
+        ctx.stroke();
+
+        // Occasional fast-scrolling foreground pylon silhouettes at bottom margin
+        for (const px of [44, 310]) {
+          ctx.fillStyle = 'rgba(4, 5, 12, 0.92)';
+          ctx.fillRect(px, 6, 16, 50);
+          ctx.fillStyle = 'rgba(0, 243, 255, 0.22)';
+          ctx.fillRect(px + 2, 10, 2, 16);
+        }
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('glow_soft')) {
+      const canvas = this.textures.createCanvas('glow_soft', 128, 128);
+      if (canvas) {
+        const ctx = canvas.context;
+        const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.65)');
+        grad.addColorStop(0.45, 'rgba(255, 255, 255, 0.22)');
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 128, 128);
+        canvas.refresh();
+      }
+    }
+
+    if (!this.textures.exists('shadow_oval')) {
+      const canvas = this.textures.createCanvas('shadow_oval', 64, 20);
+      if (canvas) {
+        const ctx = canvas.context;
+        const grad = ctx.createRadialGradient(32, 10, 2, 32, 10, 28);
+        grad.addColorStop(0, 'rgba(0, 0, 0, 0.72)');
+        grad.addColorStop(0.6, 'rgba(0, 0, 0, 0.3)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 64, 20);
         canvas.refresh();
       }
     }
@@ -918,7 +1205,6 @@ export class Preloader extends Phaser.Scene {
       const canvas = this.textures.createCanvas('hover_car_0', 36, 10);
       if (canvas) {
         const ctx = canvas.context;
-        // Left-bound sleek speeder with cyan headlight & magenta thruster tail
         ctx.fillStyle = '#1a203d';
         ctx.fillRect(6, 2, 20, 6);
         ctx.fillStyle = '#00f3ff';
@@ -933,7 +1219,6 @@ export class Preloader extends Phaser.Scene {
       const canvas = this.textures.createCanvas('hover_car_1', 36, 10);
       if (canvas) {
         const ctx = canvas.context;
-        // Right-bound distant speeder with amber headlight & cyan tail
         ctx.fillStyle = '#1a203d';
         ctx.fillRect(10, 2, 20, 6);
         ctx.fillStyle = '#ffc857';
@@ -957,7 +1242,6 @@ export class Preloader extends Phaser.Scene {
         ctx.arc(90, 90, 74, 0, Math.PI * 2);
         ctx.fill();
 
-        // Retro synthwave horizontal scanline slices in lower half
         ctx.globalCompositeOperation = 'destination-out';
         for (let y = 96; y < 164; y += 11) {
           const sliceH = 2 + Math.floor((y - 96) / 18);
