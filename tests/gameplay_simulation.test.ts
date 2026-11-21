@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_CONFIG, getJetpackMaxFuelMs } from '../constants';
+import { GAME_CONFIG, getBossVariantConfig, getJetpackMaxFuelMs } from '../constants';
 import {
   advanceComboOnEvent,
   advanceLaserState,
@@ -14,6 +14,7 @@ import {
   isOverRoadGap,
   LaserState,
   PatternId,
+  pickBossAttackSpec,
   pickBossFixedLaneY,
   pickNextPattern,
   pickPowerupType,
@@ -179,11 +180,18 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
     expect(ratio).toBeLessThan(0.75);
   });
 
-  it('scales Boss Drone max HP from 7 HP and uses predictable fixed lanes with pre-Boss spawn pause', () => {
+  it('spawns Bosses every 800m looping across 4 variants with 4-phase fixed-lane attacks and -40m pre-Boss pause', () => {
+    expect(GAME_CONFIG.BOSS_INTERVAL_METERS).toBe(800);
     expect(computeBossMaxHp(1)).toBe(7);
     expect(computeBossMaxHp(2)).toBe(11);
     expect(computeBossMaxHp(3)).toBe(15);
     expect(computeBossMaxHp(10)).toBe(22);
+
+    expect(getBossVariantConfig(1).name).toBe('Sentinel Mk-I');
+    expect(getBossVariantConfig(2).name).toBe('Crimson Viper');
+    expect(getBossVariantConfig(3).name).toBe('Solar Titan');
+    expect(getBossVariantConfig(4).name).toBe('Void Warden');
+    expect(getBossVariantConfig(5).name).toBe('Sentinel Mk-I');
 
     const groundTop = 624;
     const safeTopY = 120;
@@ -191,11 +199,15 @@ describe('Gameplay Simulation & Anomaly Checks', () => {
     const lane1 = pickBossFixedLaneY(1, groundTop, safeTopY);
     expect(lane0).toBe(groundTop - 36);
     expect(lane1).toBeLessThan(lane0 - 60);
-    expect(pickBossFixedLaneY(2, groundTop, safeTopY)).toBe(lane0);
 
-    expect(shouldPauseSpawnsForBoss(520, 600, false)).toBe(false);
-    expect(shouldPauseSpawnsForBoss(565, 600, false)).toBe(true);
-    expect(shouldPauseSpawnsForBoss(605, 1200, true)).toBe(false);
+    expect(pickBossAttackSpec(0, groundTop, safeTopY)).toEqual({ kind: 'missile', lane: 'low', laneY: lane0 });
+    expect(pickBossAttackSpec(1, groundTop, safeTopY)).toEqual({ kind: 'drone', lane: 'high', laneY: lane1 });
+    expect(pickBossAttackSpec(2, groundTop, safeTopY)).toEqual({ kind: 'missile', lane: 'high', laneY: lane1 });
+    expect(pickBossAttackSpec(3, groundTop, safeTopY)).toEqual({ kind: 'drone', lane: 'low', laneY: lane0 });
+
+    expect(shouldPauseSpawnsForBoss(750, 800, false)).toBe(false);
+    expect(shouldPauseSpawnsForBoss(760, 800, false)).toBe(true);
+    expect(shouldPauseSpawnsForBoss(810, 1600, true)).toBe(false);
   });
 
   it('disables ground collision cleanly over road chasms, blocks edge-snapping once fallen, and hovers in Overdrive', () => {

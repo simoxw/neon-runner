@@ -77,7 +77,7 @@ export function shouldPauseSpawnsForBoss(
   nextBossScoreMeters: number,
   bossActive: boolean
 ): boolean {
-  return !bossActive && scoreMeters >= Math.max(0, nextBossScoreMeters - 38);
+  return !bossActive && scoreMeters >= Math.max(0, nextBossScoreMeters - 40);
 }
 
 export function pickBossFixedLaneY(
@@ -88,6 +88,27 @@ export function pickBossFixedLaneY(
   const lowLaneY = groundTop - 36;
   const highLaneY = Math.max(safeTopY + 32, groundTop - 132);
   return Math.abs(Math.floor(laneIndex)) % 2 === 0 ? lowLaneY : highLaneY;
+}
+
+export function pickBossAttackSpec(
+  attackIndex: number,
+  groundTop: number,
+  safeTopY: number
+): { kind: 'missile' | 'drone'; lane: 'low' | 'high'; laneY: number } {
+  const phase = Math.abs(Math.floor(attackIndex)) % 4;
+  const lowLaneY = groundTop - 36;
+  const highLaneY = Math.max(safeTopY + 32, groundTop - 132);
+
+  switch (phase) {
+    case 0:
+      return { kind: 'missile', lane: 'low', laneY: lowLaneY };
+    case 1:
+      return { kind: 'drone', lane: 'high', laneY: highLaneY };
+    case 2:
+      return { kind: 'missile', lane: 'high', laneY: highLaneY };
+    default:
+      return { kind: 'drone', lane: 'low', laneY: lowLaneY };
+  }
 }
 
 export function advanceLaserState(state: LaserState, deltaMs: number): LaserState {

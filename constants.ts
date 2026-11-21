@@ -37,7 +37,7 @@ export const GAME_CONFIG = {
   OVERDRIVE_CHARGE_PER_RING: 4,
   MISSILE_SPEED_MULTIPLIER: 1.2,
   SECTOR_INTERVAL_METERS: 300,
-  BOSS_INTERVAL_METERS: 600,
+  BOSS_INTERVAL_METERS: 800,
   LASER_WARN_MS: 950,
   LASER_ACTIVE_MS: 1150,
   COMBO_DECAY_MS: 2800,
@@ -47,6 +47,45 @@ export const GAME_CONFIG = {
   EMP_BASE_COOLDOWN_MS: 22000,
   EMP_COOLDOWN_STEP_MS: 2400,
 };
+
+export interface BossVariantConfig {
+  id: string;
+  name: string;
+  tint: number;
+  attackIntervalMs: number;
+}
+
+export const BOSS_VARIANTS: BossVariantConfig[] = [
+  {
+    id: 'sentinel',
+    name: 'Sentinel Mk-I',
+    tint: 0xffffff,
+    attackIntervalMs: 2200,
+  },
+  {
+    id: 'viper',
+    name: 'Crimson Viper',
+    tint: 0xff6b8b,
+    attackIntervalMs: 2000,
+  },
+  {
+    id: 'titan',
+    name: 'Solar Titan',
+    tint: 0xffc857,
+    attackIntervalMs: 1850,
+  },
+  {
+    id: 'warden',
+    name: 'Void Warden',
+    tint: 0xc084fc,
+    attackIntervalMs: 1700,
+  },
+];
+
+export function getBossVariantConfig(encounterIndex: number): BossVariantConfig {
+  const safeIdx = Math.max(1, Math.floor(encounterIndex)) - 1;
+  return BOSS_VARIANTS[safeIdx % BOSS_VARIANTS.length];
+}
 
 export const DAILY_REWARD_SCHEDULE = [25, 35, 50, 65, 80, 100, 120];
 

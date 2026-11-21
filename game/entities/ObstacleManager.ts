@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
-import { GAME_CONFIG, getGroundHeight } from '../../constants';
+import {
+  GAME_CONFIG,
+  getBossVariantConfig,
+  getGroundHeight,
+} from '../../constants';
 import {
   advanceLaserState,
   computeBossMaxHp,
@@ -7,7 +11,7 @@ import {
   isChasmPattern,
   LaserPhase,
   PatternId,
-  pickBossFixedLaneY,
+  pickBossAttackSpec,
   pickNextPattern,
   pickPowerupType,
   RoadGapSpan,
@@ -45,11 +49,14 @@ export class ObstacleManager {
   public bosses: Phaser.Physics.Arcade.Group;
 
   public bossActive: boolean = false;
+  public bossName: string = '';
   public bossHp: number = 0;
   public bossMaxHp: number = 0;
   public bossEncounterCount: number = 0;
 
   private activeBoss: Phaser.Physics.Arcade.Sprite | null = null;
+  private bossTint: number = 0xffffff;
+  private bossAttackIntervalMs: number = 2200;
   private bossRetreating: boolean = false;
   private bossTimerMs: number = 0;
   private bossAttackTimerMs: number = 0;
@@ -61,7 +68,7 @@ export class ObstacleManager {
     marker: Phaser.GameObjects.Sprite;
   } | null = null;
   private nextBossScoreMeters: number = GAME_CONFIG.BOSS_INTERVAL_METERS;
-  private onBossAlert: ((bossNumber: number) => void) | null = null;
+  private onBossAlert: ((bossNumber: number, bossName: string) => void) | null = null;
 
   private distanceUntilNextPattern: number = 220;
   private distanceSincePowerup: number = 0;
@@ -71,7 +78,7 @@ export class ObstacleManager {
   private chainRemaining: number = 0;
   private warnings: ActiveMissileWarning[] = [];
 
-  constructor(scene: Phaser.Scene, onBossAlert?: (bossNumber: number) => void) {
+  constructor(scene: Phaser.Scene, onBossAlert?: (bossNumber: number, bossName: string) => void) {
     this.scene = scene;
     this.onBossAlert = onBossAlert ?? null;
 
@@ -299,11 +306,15 @@ export class ObstacleManager {
     const gh = getGroundHeight(height);
     const groundTop = height - gh;
     const safeTopY = Math.max(88, height * 0.24);
-    const spawnY = (safeTopY + groundTop - 60) * 0.5;
+    const spawnY = Math.max(safeTopY + 38, groundTop - 98);
 
     this.clearPendingBossAttack();
     this.bossEncounterCount += 1;
     this.nextBossScoreMeters += GAME_CONFIG.BOSS_INTERVAL_METERS;
+    const variant = getBossVariantConfig(this.bossEncounterCount);
+    this.bossName = variant.name;
+    this.bossTint = variant.tint;
+    this.bossAttackIntervalMs = variant.attackIntervalMs;
     this.bossMaxHp = computeBossMaxHp(this.bossEncounterCount);
     this.bossHp = this.bossMaxHp;
     this.bossActive = true;
@@ -314,7 +325,11 @@ export class ObstacleManager {
 
     const boss = this.bosses.get(width + 110, spawnY, 'boss_drone_0') as Phaser.Physics.Arcade.Sprite | null;
     if (boss) {
-      boss.clearTint();
+      if (variant.tint !== 0xffffff) {
+        boss.setTint(variant.tint);
+      } else {
+        boss.clearTint();
+      }
       boss.enableBody(true, width + 110, spawnY, true, true);
       boss.setDepth(8);
       boss.play('anim_boss_drone', true);
@@ -329,13 +344,14 @@ export class ObstacleManager {
     }
 
     soundEngine.playBossAlert();
-    this.onBossAlert?.(this.bossEncounterCount);
+    this.onBossAlert?.(this.bossEncounterCount, variant.name);
   }
 
   private updateBoss(time: number, delta: number, speed: number, _player: Player | null) {
     if (!this.activeBoss || !this.activeBoss.active) {
       this.clearPendingBossAttack();
       this.bossActive = false;
+      this.bossName = '';
       this.activeBoss = null;
       return;
     }
@@ -351,6 +367,7 @@ export class ObstacleManager {
     if (!this.bossRetreating && this.bossTimerMs >= 19000) {
       this.bossRetreating = true;
       this.clearPendingBossAttack();
+      this.distanceUntilNextPattern = Math.max(this.distanceUntilNextPattern, Math.max(360, speed * 0.72));
     }
 
     if (this.bossRetreating) {
@@ -360,6 +377,7 @@ export class ObstacleManager {
         this.activeBoss.disableBody(true, true);
         this.activeBoss = null;
         this.bossActive = false;
+        this.bossName = '';
         this.bossHp = 0;
       }
       return;
@@ -368,11 +386,12 @@ export class ObstacleManager {
     const targetX = Math.max(width * 0.62, width - 135);
     this.activeBoss.x = Phaser.Math.Linear(this.activeBoss.x, targetX, Math.min(1, dtSec * 3.2));
 
-    const minHoverY = safeTopY + 34;
-    const maxHoverY = Math.max(minHoverY + 24, groundTop - 82);
+    // Low-to-mid combat hover band: reachable by ground shots on low pass and single jump throughout
+    const maxHoverY = groundTop - 52;
+    const minHoverY = Math.max(safeTopY + 38, Math.min(maxHoverY - 40, groundTop - 150));
     const centerHoverY = (minHoverY + maxHoverY) * 0.5;
-    const hoverAmp = (maxHoverY - minHoverY) * 0.44;
-    this.activeBoss.y = centerHoverY + Math.sin(time * 0.0026) * hoverAmp;
+    const hoverAmp = (maxHoverY - minHoverY) * 0.48;
+    this.activeBoss.y = centerHoverY + Math.sin(time * 0.0024) * hoverAmp;
 
     // Telegraph pending fixed-lane attack before firing
     if (this.pendingBossAttack) {
@@ -397,23 +416,21 @@ export class ObstacleManager {
 
     this.bossAttackTimerMs -= delta;
     if (this.bossAttackTimerMs <= 0 && this.activeBoss.x < width + 10) {
-      const interval = Math.max(1500, 2200 - (this.bossEncounterCount - 1) * 140);
-      this.bossAttackTimerMs = interval;
+      this.bossAttackTimerMs = this.bossAttackIntervalMs;
 
-      // Predictable fixed lanes (never aimed at player's current height)
-      const laneY = pickBossFixedLaneY(this.bossLaneIndex, groundTop, safeTopY);
-      const kind: 'missile' | 'drone' = this.bossLaneIndex % 2 === 0 ? 'missile' : 'drone';
+      // Predictable 4-phase fixed-lane attacks (never aimed at player's current height)
+      const spec = pickBossAttackSpec(this.bossLaneIndex, groundTop, safeTopY);
       this.bossLaneIndex += 1;
 
       const marker = this.scene.add.sprite(
         this.activeBoss.x - 58,
-        laneY,
+        spec.laneY,
         'missile_warning'
       );
       marker.setDepth(15);
       this.pendingBossAttack = {
-        kind,
-        laneY,
+        kind: spec.kind,
+        laneY: spec.laneY,
         remainingMs: 650,
         marker,
       };
@@ -441,14 +458,21 @@ export class ObstacleManager {
       this.activeBoss.disableBody(true, true);
       this.activeBoss = null;
       this.bossActive = false;
+      this.bossName = '';
+      this.distanceUntilNextPattern = Math.max(this.distanceUntilNextPattern, 360);
       const bountyBase = 28 + this.bossEncounterCount * 10;
       return { hit: true, defeated: true, x: bx, y: by, bountyBase };
     }
 
+    const restoreTint = this.bossTint;
     this.activeBoss.setTint(0xffffff);
     this.scene.time.delayedCall(65, () => {
       if (this.activeBoss && this.activeBoss.active) {
-        this.activeBoss.clearTint();
+        if (restoreTint !== 0xffffff) {
+          this.activeBoss.setTint(restoreTint);
+        } else {
+          this.activeBoss.clearTint();
+        }
       }
     });
 
@@ -529,18 +553,13 @@ export class ObstacleManager {
     const startX = width + 90;
 
     if (Phaser.Math.Between(0, 1) === 0) {
-      this.spawnJumpPad(startX + 40, groundTop, speed);
-      this.spawnCoinArc(
-        startX + 120,
-        Math.max(safeTopY + 18, groundTop - Math.min(165, usableHeight * 0.72)),
-        4,
-        speed,
-        safeTopY
-      );
+      const lowPlatformY = Math.max(safeTopY + 32, groundTop - Math.min(92, usableHeight * 0.42));
+      this.spawnPlatform(startX + 90, lowPlatformY, speed);
+      this.spawnCoinLine(startX + 46, Math.max(safeTopY, lowPlatformY - 28), 3, speed);
     } else {
       this.spawnCoinArc(
         startX + 40,
-        Math.max(safeTopY + 20, groundTop - Math.min(92, usableHeight * 0.45)),
+        Math.max(safeTopY + 20, groundTop - Math.min(86, usableHeight * 0.4)),
         4,
         speed,
         safeTopY
@@ -1271,6 +1290,9 @@ export class ObstacleManager {
     this.warnings = [];
 
     this.bossActive = false;
+    this.bossName = '';
+    this.bossTint = 0xffffff;
+    this.bossAttackIntervalMs = 2200;
     this.bossHp = 0;
     this.bossMaxHp = 0;
     this.bossEncounterCount = 0;

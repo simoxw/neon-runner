@@ -87,6 +87,7 @@ const App: React.FC = () => {
   const [bossesDefeated, setBossesDefeated] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [bossActive, setBossActive] = useState(false);
+  const [bossName, setBossName] = useState('');
   const [bossHp, setBossHp] = useState(0);
   const [bossMaxHp, setBossMaxHp] = useState(0);
   const [activeRunMode, setActiveRunMode] = useState<RunMode>(() => progress.runMode);
@@ -243,6 +244,7 @@ const App: React.FC = () => {
           setBossesDefeated(0);
           setMaxCombo(0);
           setBossActive(false);
+          setBossName('');
           setBossHp(0);
           setBossMaxHp(0);
           setSpeedMultiplier(
@@ -282,6 +284,7 @@ const App: React.FC = () => {
           if (typeof data?.maxCombo === 'number') setMaxCombo(data.maxCombo);
           if (typeof data?.bossesDefeated === 'number') setBossesDefeated(data.bossesDefeated);
           if (typeof data?.bossActive === 'boolean') setBossActive(data.bossActive);
+          if (typeof data?.bossName === 'string') setBossName(data.bossName);
           if (typeof data?.bossHp === 'number') setBossHp(data.bossHp);
           if (typeof data?.bossMaxHp === 'number') setBossMaxHp(data.bossMaxHp);
 
@@ -348,6 +351,7 @@ const App: React.FC = () => {
           setBossesDefeated(finalBosses);
           setMaxCombo(finalMaxCombo);
           setBossActive(false);
+          setBossName('');
           setBossHp(0);
           setBossMaxHp(0);
           setActiveRunMode(finishedMode);
@@ -492,6 +496,10 @@ const App: React.FC = () => {
     progressRef.current = rotated;
     setProgress(rotated);
     setGameState(GameState.MENU);
+    setBossActive(false);
+    setBossName('');
+    setBossHp(0);
+    setBossMaxHp(0);
     setSectorNumber(1);
     setSectorName(SECTORS_PALETTE[0].name);
     window.dispatchEvent(new CustomEvent('PHASER_MENU'));
@@ -566,6 +574,7 @@ const App: React.FC = () => {
           comboCount={comboCount}
           comboMultiplier={comboMultiplier}
           bossActive={bossActive}
+          bossName={bossName}
           bossHp={bossHp}
           bossMaxHp={bossMaxHp}
           buffs={buffs}

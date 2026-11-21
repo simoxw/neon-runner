@@ -197,12 +197,12 @@ export class MainGame extends Phaser.Scene {
     );
     this.applyProgressToPlayer();
 
-    this.obstacleManager = new ObstacleManager(this, (bossNumber) => {
+    this.obstacleManager = new ObstacleManager(this, (_bossNumber, bossName) => {
       const { width, height } = this.scale;
       this.spawnFloatingText(
         width / 2,
         Math.max(115, height * 0.25),
-        `ALLERTA BOSS DRONE #${bossNumber}`,
+        `ALLERTA BOSS: ${bossName.toUpperCase()}`,
         '#ff2a6d'
       );
       this.emitRunUpdate();
@@ -1257,6 +1257,7 @@ export class MainGame extends Phaser.Scene {
       runMode: this.runMode,
       bossesDefeated: this.bossesDefeated,
       bossActive: this.obstacleManager?.bossActive ?? false,
+      bossName: this.obstacleManager?.bossName ?? '',
       bossHp: this.obstacleManager?.bossHp ?? 0,
       bossMaxHp: this.obstacleManager?.bossMaxHp ?? 0,
     });

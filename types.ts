@@ -104,6 +104,7 @@ export interface RunTelemetry {
   runMode: RunMode;
   bossesDefeated: number;
   bossActive: boolean;
+  bossName: string;
   bossHp: number;
   bossMaxHp: number;
 }

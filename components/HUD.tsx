@@ -17,6 +17,7 @@ interface HUDProps {
   comboCount: number;
   comboMultiplier: number;
   bossActive: boolean;
+  bossName: string;
   bossHp: number;
   bossMaxHp: number;
   buffs: ActiveBuffs;
@@ -37,6 +38,7 @@ const HUD: React.FC<HUDProps> = ({
   comboCount,
   comboMultiplier,
   bossActive,
+  bossName,
   bossHp,
   bossMaxHp,
   buffs,
@@ -196,7 +198,7 @@ const HUD: React.FC<HUDProps> = ({
             <div className="flex items-center gap-2 rounded-md border border-rose-500/50 bg-[#1a0b18]/90 px-2.5 py-1 backdrop-blur-sm">
               <Skull className="h-3.5 w-3.5 text-rose-400" />
               <span className="text-[11px] font-bold text-rose-200 whitespace-nowrap">
-                Boss Drone
+                {bossName || 'Boss Drone'}
               </span>
               <div className="h-1.5 w-20 overflow-hidden rounded-full bg-white/10 sm:w-28">
                 <div
